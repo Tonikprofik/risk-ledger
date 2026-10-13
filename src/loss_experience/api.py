@@ -18,10 +18,10 @@ from loss_experience.domain import (
     ExclusionSummary,
     FlagCount,
     FlagKind,
+    LossFigures,
     Peril,
     PerilLossExperience,
     PortfolioLossExperience,
-    PortfolioTotal,
     RepairCount,
     RepairKind,
     exclusion_summaries,
@@ -40,52 +40,40 @@ def _rounded(value: float | None, digits: int) -> float | None:
     return None if value is None else round(value, digits)
 
 
-class PerilLossExperienceOut(BaseModel):
+class LossFiguresOut(BaseModel):
+    """The six figures of the brief; DKK rounded to 2 decimals, the ratio to 4."""
+
+    policy_count: int = Field(ge=0)
+    earned_premium_dkk: float = Field(description="Full annual premium at the inception month.")
+    incurred_loss_dkk: float
+    loss_ratio: float | None = Field(
+        description="incurred_loss_dkk / earned_premium_dkk; null when earned premium is 0."
+    )
+    claim_count: int = Field(ge=0, description="Kept Claims of every status.")
+    largest_claim_dkk: float | None = Field(description="null when claim_count is 0.")
+
+    @staticmethod
+    def _fields(figures: LossFigures) -> dict[str, object]:
+        return {
+            "policy_count": figures.policy_count,
+            "earned_premium_dkk": round(figures.earned_premium_dkk, DKK_DECIMALS),
+            "incurred_loss_dkk": round(figures.incurred_loss_dkk, DKK_DECIMALS),
+            "loss_ratio": _rounded(figures.loss_ratio, RATIO_DECIMALS),
+            "claim_count": figures.claim_count,
+            "largest_claim_dkk": _rounded(figures.largest_claim_dkk, DKK_DECIMALS),
+        }
+
+    @classmethod
+    def from_domain(cls, figures: LossFigures) -> "LossFiguresOut":
+        return cls.model_validate(cls._fields(figures))
+
+
+class PerilLossExperienceOut(LossFiguresOut):
     peril: Peril
-    policy_count: int = Field(ge=0)
-    earned_premium_dkk: float = Field(description="Full annual premium at the inception month.")
-    incurred_loss_dkk: float
-    loss_ratio: float | None = Field(
-        description="incurred_loss_dkk / earned_premium_dkk; null when earned premium is 0."
-    )
-    claim_count: int = Field(ge=0, description="Kept Claims of every status.")
-    largest_claim_dkk: float | None = Field(description="null when claim_count is 0.")
 
     @classmethod
-    def from_domain(cls, result: PerilLossExperience) -> "PerilLossExperienceOut":
-        return cls(
-            peril=result.peril,
-            policy_count=result.policy_count,
-            earned_premium_dkk=round(result.earned_premium_dkk, DKK_DECIMALS),
-            incurred_loss_dkk=round(result.incurred_loss_dkk, DKK_DECIMALS),
-            loss_ratio=_rounded(result.loss_ratio, RATIO_DECIMALS),
-            claim_count=result.claim_count,
-            largest_claim_dkk=_rounded(result.largest_claim_dkk, DKK_DECIMALS),
-        )
-
-
-class PortfolioTotalOut(BaseModel):
-    """The six figures of a Peril row, summed over every Peril of the Portfolio."""
-
-    policy_count: int = Field(ge=0)
-    earned_premium_dkk: float = Field(description="Full annual premium at the inception month.")
-    incurred_loss_dkk: float
-    loss_ratio: float | None = Field(
-        description="incurred_loss_dkk / earned_premium_dkk; null when earned premium is 0."
-    )
-    claim_count: int = Field(ge=0, description="Kept Claims of every status.")
-    largest_claim_dkk: float | None = Field(description="null when claim_count is 0.")
-
-    @classmethod
-    def from_domain(cls, total: PortfolioTotal) -> "PortfolioTotalOut":
-        return cls(
-            policy_count=total.policy_count,
-            earned_premium_dkk=round(total.earned_premium_dkk, DKK_DECIMALS),
-            incurred_loss_dkk=round(total.incurred_loss_dkk, DKK_DECIMALS),
-            loss_ratio=_rounded(total.loss_ratio, RATIO_DECIMALS),
-            claim_count=total.claim_count,
-            largest_claim_dkk=_rounded(total.largest_claim_dkk, DKK_DECIMALS),
-        )
+    def from_peril(cls, result: PerilLossExperience) -> "PerilLossExperienceOut":
+        return cls.model_validate({"peril": result.peril, **cls._fields(result.figures)})
 
 
 class ExclusionOut(BaseModel):
@@ -106,7 +94,7 @@ class ExclusionOut(BaseModel):
 
 class PortfolioLossExperienceOut(BaseModel):
     portfolio_id: str
-    total: PortfolioTotalOut = Field(description="The six figures over every Peril.")
+    total: LossFiguresOut = Field(description="The six figures over every Peril.")
     perils: list[PerilLossExperienceOut] = Field(description="Every Peril, always listed.")
     exclusions: list[ExclusionOut] = Field(
         description="Source Claims left out of every result, one row per reason."
@@ -116,8 +104,8 @@ class PortfolioLossExperienceOut(BaseModel):
     def from_domain(cls, result: PortfolioLossExperience) -> "PortfolioLossExperienceOut":
         return cls(
             portfolio_id=result.portfolio_id,
-            total=PortfolioTotalOut.from_domain(result.total),
-            perils=[PerilLossExperienceOut.from_domain(peril) for peril in result.perils],
+            total=LossFiguresOut.from_domain(result.total),
+            perils=[PerilLossExperienceOut.from_peril(peril) for peril in result.perils],
             exclusions=[ExclusionOut.from_domain(summary) for summary in result.exclusions],
         )
 

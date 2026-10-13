@@ -183,6 +183,65 @@
         "title": "LoadedCountsOut",
         "type": "object"
       },
+      "LossFiguresOut": {
+        "description": "The six figures of the brief; DKK rounded to 2 decimals, the ratio to 4.",
+        "properties": {
+          "claim_count": {
+            "description": "Kept Claims of every status.",
+            "minimum": 0.0,
+            "title": "Claim Count",
+            "type": "integer"
+          },
+          "earned_premium_dkk": {
+            "description": "Full annual premium at the inception month.",
+            "title": "Earned Premium Dkk",
+            "type": "number"
+          },
+          "incurred_loss_dkk": {
+            "title": "Incurred Loss Dkk",
+            "type": "number"
+          },
+          "largest_claim_dkk": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "null when claim_count is 0.",
+            "title": "Largest Claim Dkk"
+          },
+          "loss_ratio": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "incurred_loss_dkk / earned_premium_dkk; null when earned premium is 0.",
+            "title": "Loss Ratio"
+          },
+          "policy_count": {
+            "minimum": 0.0,
+            "title": "Policy Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "policy_count",
+          "earned_premium_dkk",
+          "incurred_loss_dkk",
+          "loss_ratio",
+          "claim_count",
+          "largest_claim_dkk"
+        ],
+        "title": "LossFiguresOut",
+        "type": "object"
+      },
       "Peril": {
         "enum": [
           "fire",
@@ -245,13 +304,13 @@
           }
         },
         "required": [
-          "peril",
           "policy_count",
           "earned_premium_dkk",
           "incurred_loss_dkk",
           "loss_ratio",
           "claim_count",
-          "largest_claim_dkk"
+          "largest_claim_dkk",
+          "peril"
         ],
         "title": "PerilLossExperienceOut",
         "type": "object"
@@ -279,7 +338,7 @@
             "type": "string"
           },
           "total": {
-            "$ref": "#/components/schemas/PortfolioTotalOut",
+            "$ref": "#/components/schemas/LossFiguresOut",
             "description": "The six figures over every Peril."
           }
         },
@@ -307,65 +366,6 @@
           "portfolios"
         ],
         "title": "PortfolioRankingOut",
-        "type": "object"
-      },
-      "PortfolioTotalOut": {
-        "description": "The six figures of a Peril row, summed over every Peril of the Portfolio.",
-        "properties": {
-          "claim_count": {
-            "description": "Kept Claims of every status.",
-            "minimum": 0.0,
-            "title": "Claim Count",
-            "type": "integer"
-          },
-          "earned_premium_dkk": {
-            "description": "Full annual premium at the inception month.",
-            "title": "Earned Premium Dkk",
-            "type": "number"
-          },
-          "incurred_loss_dkk": {
-            "title": "Incurred Loss Dkk",
-            "type": "number"
-          },
-          "largest_claim_dkk": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "null when claim_count is 0.",
-            "title": "Largest Claim Dkk"
-          },
-          "loss_ratio": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "incurred_loss_dkk / earned_premium_dkk; null when earned premium is 0.",
-            "title": "Loss Ratio"
-          },
-          "policy_count": {
-            "minimum": 0.0,
-            "title": "Policy Count",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "policy_count",
-          "earned_premium_dkk",
-          "incurred_loss_dkk",
-          "loss_ratio",
-          "claim_count",
-          "largest_claim_dkk"
-        ],
-        "title": "PortfolioTotalOut",
         "type": "object"
       },
       "RepairCountOut": {

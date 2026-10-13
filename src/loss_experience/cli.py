@@ -4,12 +4,13 @@ loss-experience portfolio PF-01      one Portfolio's loss experience, as the API
 loss-experience quality              exclusions with their DKK amounts, then repair and flag counts
 loss-experience ranking              every Portfolio's total, worst loss ratio first
 loss-experience proof                every Portfolio and Peril, the ranking, then the quality
-                                 lines; also written to proof/latest.txt
+                                 lines; without --data it is also written to proof/latest.txt
 loss-experience openapi              the API contract, for docs/openapi.json
 
 `--data` is the directory holding assets.csv, policies.csv, claims.csv and fx_rates.csv.
 Without it: `data` when it holds CSVs, else `sample`, a tiny committed set with one of
-each awkward row (CI has no real data). The first output line names the directory used.
+each awkward row. `proof` without `--data` always reads `sample`, so proof/latest.txt is
+the same on every machine and in CI. The first output line names the directory used.
 """
 
 import argparse
@@ -24,7 +25,7 @@ from loss_experience.domain import (
     DataQuality,
     FlagKind,
     FxTable,
-    PerilLossExperience,
+    LossFigures,
     RepairKind,
     exclusion_summaries,
     flag_counts,
@@ -42,24 +43,21 @@ def _or_null(value: float | None, spec: str) -> str:
     return "null" if value is None else format(value, spec)
 
 
-def _peril_line(portfolio_id: str, result: PerilLossExperience) -> str:
+def _figures(figures: LossFigures) -> str:
+    """The six figures at the API's precision, so a proof line and a response agree."""
     return (
-        f"{portfolio_id}\t{result.peril}\tpolicies={result.policy_count}"
-        f"\tpremium_dkk={result.earned_premium_dkk:.2f}"
-        f"\tincurred_dkk={result.incurred_loss_dkk:.2f}"
-        f"\tratio={_or_null(result.loss_ratio, '.4f')}\tclaims={result.claim_count}"
-        f"\tlargest_dkk={_or_null(result.largest_claim_dkk, '.2f')}"
+        f"policies={figures.policy_count}"
+        f"\tpremium_dkk={figures.earned_premium_dkk:.2f}"
+        f"\tincurred_dkk={figures.incurred_loss_dkk:.2f}"
+        f"\tratio={_or_null(figures.loss_ratio, '.4f')}\tclaims={figures.claim_count}"
+        f"\tlargest_dkk={_or_null(figures.largest_claim_dkk, '.2f')}"
     )
 
 
 def ranking_lines(book: Book) -> list[str]:
     """One line per Portfolio, worst total loss ratio first (D16)."""
     return [
-        f"ranked\t{result.portfolio_id}\tpolicies={result.total.policy_count}"
-        f"\tpremium_dkk={result.total.earned_premium_dkk:.2f}"
-        f"\tincurred_dkk={result.total.incurred_loss_dkk:.2f}"
-        f"\tratio={_or_null(result.total.loss_ratio, '.4f')}\tclaims={result.total.claim_count}"
-        f"\tlargest_dkk={_or_null(result.total.largest_claim_dkk, '.2f')}"
+        f"ranked\t{result.portfolio_id}\t{_figures(result.total)}"
         for result in rank_portfolios(book)
     ]
 
@@ -70,7 +68,7 @@ def portfolio_lines(book: Book) -> list[str]:
     for portfolio_id in sorted({asset.portfolio_id for asset in book.assets}):
         result = loss_experience(book, portfolio_id)
         if result is not None:
-            lines.extend(_peril_line(portfolio_id, peril) for peril in result.perils)
+            lines.extend(f"{portfolio_id}\t{p.peril}\t{_figures(p.figures)}" for p in result.perils)
     return lines
 
 
@@ -153,7 +151,7 @@ def main(argv: list[str] | None = None) -> int:
     else:
         body = quality_lines(book)
     text = "\n".join([f"data: {data.as_posix()}", *body]) + "\n"
-    if args.command == "proof":
+    if args.command == "proof" and args.data is None:
         PROOF.parent.mkdir(exist_ok=True)
         PROOF.write_text(text, encoding="utf-8")
     print(text, end="")
