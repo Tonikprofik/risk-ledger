@@ -39,12 +39,11 @@ class ExclusionReason(StrEnum):
 
 @dataclass(frozen=True)
 class Asset:
+    """Only what a result uses. assets.csv also has region, type, construction year and sum
+    insured; the filters that would read them were cut (D17), so they are not parsed."""
+
     asset_id: str
     portfolio_id: str
-    region: str
-    asset_type: str
-    construction_year: int
-    sum_insured_dkk: float
 
 
 @dataclass(frozen=True)
@@ -212,11 +211,6 @@ def incurred_loss_dkk(claim: Claim, fx: FxTable) -> float:
         case _:
             assert_never(claim.status)
     return to_dkk(amount, claim.currency, claim.loss_date, fx)
-
-
-def underwriting_year(policy: Policy) -> int:
-    """The calendar year in which the Policy incepted."""
-    return policy.inception_date.year
 
 
 def earned_premium_dkk(policy: Policy, fx: FxTable) -> float:

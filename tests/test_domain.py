@@ -9,10 +9,7 @@ from loss_experience.domain import (
     Currency,
     FxTable,
     MissingFxRate,
-    Peril,
-    Policy,
     incurred_loss_dkk,
-    underwriting_year,
 )
 
 FX = FxTable({(2023, 9, Currency.DKK): 1.0, (2023, 9, Currency.EUR): 7.47})
@@ -55,11 +52,3 @@ def test_missing_fx_month_raises_instead_of_defaulting() -> None:
 
     with pytest.raises(MissingFxRate, match="no DKK rate for 2023-10"):
         incurred_loss_dkk(october, FX)
-
-
-def test_underwriting_year_is_the_calendar_year_of_inception() -> None:
-    late_december = Policy(
-        "POL-1", "AST-1", Peril.FIRE, date(2023, 12, 31), date(2024, 12, 30), 100.0, Currency.DKK
-    )
-
-    assert underwriting_year(late_december) == 2023

@@ -22,9 +22,7 @@ from typing import assert_never
 from loss_experience.api import PortfolioLossExperienceOut, create_app
 from loss_experience.domain import (
     Book,
-    DataQuality,
     FlagKind,
-    FxTable,
     LossFigures,
     RepairKind,
     exclusion_summaries,
@@ -36,7 +34,6 @@ from loss_experience.domain import (
 from loss_experience.sources import SAMPLE_DATA, default_data, load_book
 
 PROOF = Path("proof/latest.txt")
-EMPTY_BOOK = Book((), (), (), FxTable({}), (), DataQuality(0, 0, 0, 0, 0, 0.0, 0, 0))
 
 
 def _or_null(value: float | None, spec: str) -> str:
@@ -125,7 +122,8 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     if args.command == "openapi":
-        print(json.dumps(create_app(EMPTY_BOOK).openapi(), indent=2, sort_keys=True))
+        app = create_app(load_book(SAMPLE_DATA))  # the schema does not depend on the data
+        print(json.dumps(app.openapi(), indent=2, sort_keys=True))
         return 0
 
     if args.data is not None:

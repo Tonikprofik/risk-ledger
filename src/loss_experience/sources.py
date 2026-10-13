@@ -30,14 +30,7 @@ from loss_experience.domain import (
     to_dkk,
 )
 
-ASSET_COLUMNS = (
-    "asset_id",
-    "portfolio_id",
-    "region",
-    "asset_type",
-    "construction_year",
-    "sum_insured_dkk",
-)
+ASSET_COLUMNS = ("asset_id", "portfolio_id")
 POLICY_COLUMNS = (
     "policy_id",
     "asset_id",
@@ -203,14 +196,7 @@ def _fx_rate(row: Row) -> tuple[FxKey, float]:
 
 
 def _asset(row: Row) -> Asset:
-    return Asset(
-        asset_id=row["asset_id"],
-        portfolio_id=row["portfolio_id"],
-        region=row["region"],
-        asset_type=row["asset_type"],
-        construction_year=int(row["construction_year"]),
-        sum_insured_dkk=_number(row["sum_insured_dkk"]),
-    )
+    return Asset(asset_id=row["asset_id"], portfolio_id=row["portfolio_id"])
 
 
 def _policy(row: Row) -> tuple[Policy, bool]:
