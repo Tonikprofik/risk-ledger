@@ -12,7 +12,6 @@ from collections.abc import Callable, Mapping, Sequence
 from datetime import date, datetime
 from itertools import pairwise
 from pathlib import Path
-from typing import Protocol
 
 from loss_experience.domain import (
     Asset,
@@ -24,10 +23,9 @@ from loss_experience.domain import (
     Exclusion,
     ExclusionReason,
     FxTable,
-    Observations,
+    MissingFxRate,
     Peril,
     Policy,
-    Provenance,
     incurred_loss_dkk,
     to_dkk,
 )
@@ -78,10 +76,12 @@ def load_book(data_dir: Path) -> Book:
     parsed_policies = _load(data_dir / "policies.csv", POLICY_COLUMNS, _policy)
     policies = tuple(policy for policy, _ in parsed_policies)
     _require_unique([policy.policy_id for policy in policies], "policies.csv policy_id")
+    _require_known_assets(policies, {asset.asset_id for asset in assets})
     policy_by_id = {policy.policy_id: policy for policy in policies}
 
     parsed_claims = _load(data_dir / "claims.csv", CLAIM_COLUMNS, _claim)
     _require_unique([claim.claim_id for claim, _, _ in parsed_claims], "claims.csv claim_id")
+    _require_fx(fx, policies, [claim for claim, _, _ in parsed_claims])
 
     claims: list[Claim] = []
     exclusions: list[Exclusion] = []
@@ -90,7 +90,9 @@ def load_book(data_dir: Path) -> Book:
         if reason is None:
             claims.append(claim)
         else:
-            exclusions.append(Exclusion(reason, claim.claim_id, incurred_loss_dkk(claim, fx)))
+            exclusions.append(
+                Exclusion(reason, claim.claim_id, claim.policy_id, incurred_loss_dkk(claim, fx))
+            )
 
     settled_with_reserve = [
         claim
@@ -115,6 +117,30 @@ def load_book(data_dir: Path) -> Book:
         overlapping_terms=_overlapping_terms(policies),
     )
     return Book(assets, policies, tuple(claims), fx, tuple(exclusions), quality)
+
+
+def _require_known_assets(policies: Sequence[Policy], asset_ids: set[str]) -> None:
+    unknown = [policy.policy_id for policy in policies if policy.asset_id not in asset_ids]
+    if unknown:
+        raise ValueError(
+            f"policies.csv: {len(unknown)} policies name an asset_id not in assets.csv, "
+            f"first {unknown[:3]}"
+        )
+
+
+def _require_fx(fx: FxTable, policies: Sequence[Policy], claims: Sequence[Claim]) -> None:
+    """Every rate a result needs exists: a premium at its inception month, a claim at its loss
+    month, each in its own currency. A gap fails the load, not a later request."""
+    for policy in policies:
+        try:
+            fx.rate(policy.inception_date.year, policy.inception_date.month, policy.currency)
+        except MissingFxRate as error:
+            raise ValueError(f"policies.csv {policy.policy_id}: {error}") from error
+    for claim in claims:
+        try:
+            fx.rate(claim.loss_date.year, claim.loss_date.month, claim.currency)
+        except MissingFxRate as error:
+            raise ValueError(f"claims.csv {claim.claim_id}: {error}") from error
 
 
 def _exclusion_reason(claim: Claim, policy_by_id: Mapping[str, Policy]) -> ExclusionReason | None:
@@ -232,34 +258,3 @@ def _number(text: str) -> float:
     if not math.isfinite(value):
         raise ValueError(f"amount {text!r} is not a finite number")
     return value
-
-
-# --- Starter assessment skeleton, kept only so api.py imports until U2 ----------------------
-
-
-class ObservationSource(Protocol):
-    def observations(self, asset_id: str) -> Observations | None: ...
-
-    def all_observations(self) -> list[Observations]: ...
-
-
-class CsvObservationSource:
-    """CSV with `asset_id,value` rows; an empty cell is nodata."""
-
-    def __init__(self, path: Path) -> None:
-        self._provenance = Provenance(source=path.name)
-        self._values: dict[str, list[float | None]] = {}
-        with path.open(newline="", encoding="utf-8") as file:
-            for row in csv.DictReader(file):
-                value = row["value"].strip()
-                self._values.setdefault(row["asset_id"], []).append(float(value) if value else None)
-
-    def observations(self, asset_id: str) -> Observations | None:
-        values = self._values.get(asset_id)
-        return None if values is None else Observations(asset_id, tuple(values), self._provenance)
-
-    def all_observations(self) -> list[Observations]:
-        return [
-            Observations(asset_id, tuple(values), self._provenance)
-            for asset_id, values in sorted(self._values.items())
-        ]

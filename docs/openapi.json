@@ -1,46 +1,38 @@
 {
   "components": {
     "schemas": {
-      "AssessmentOut": {
+      "ExclusionOut": {
+        "description": "policy_not_found is book-wide (no Policy, so no Portfolio); the rest are this Portfolio's.",
         "properties": {
-          "asset_id": {
-            "title": "Asset Id",
-            "type": "string"
-          },
-          "coverage_fraction": {
-            "maximum": 1.0,
-            "minimum": 0.0,
-            "title": "Coverage Fraction",
+          "amount_dkk": {
+            "description": "Incurred loss the excluded Claims would have had.",
+            "title": "Amount Dkk",
             "type": "number"
           },
-          "provenance": {
-            "$ref": "#/components/schemas/ProvenanceOut"
+          "claim_count": {
+            "minimum": 0.0,
+            "title": "Claim Count",
+            "type": "integer"
           },
-          "status": {
-            "$ref": "#/components/schemas/Status"
-          },
-          "value": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Present if and only if status is ok.",
-            "title": "Value"
+          "reason": {
+            "$ref": "#/components/schemas/ExclusionReason"
           }
         },
         "required": [
-          "asset_id",
-          "status",
-          "value",
-          "coverage_fraction",
-          "provenance"
+          "reason",
+          "claim_count",
+          "amount_dkk"
         ],
-        "title": "AssessmentOut",
+        "title": "ExclusionOut",
         "type": "object"
+      },
+      "ExclusionReason": {
+        "enum": [
+          "policy_not_found",
+          "negative_paid_amount"
+        ],
+        "title": "ExclusionReason",
+        "type": "string"
       },
       "HTTPValidationError": {
         "properties": {
@@ -68,26 +60,109 @@
         "title": "Health",
         "type": "object"
       },
-      "ProvenanceOut": {
+      "Peril": {
+        "enum": [
+          "fire",
+          "flood",
+          "hail",
+          "storm",
+          "subsidence"
+        ],
+        "title": "Peril",
+        "type": "string"
+      },
+      "PerilLossExperienceOut": {
         "properties": {
-          "source": {
-            "title": "Source",
+          "claim_count": {
+            "description": "Kept Claims of every status.",
+            "minimum": 0.0,
+            "title": "Claim Count",
+            "type": "integer"
+          },
+          "earned_premium_dkk": {
+            "description": "Full annual premium at the inception month.",
+            "title": "Earned Premium Dkk",
+            "type": "number"
+          },
+          "incurred_loss_dkk": {
+            "title": "Incurred Loss Dkk",
+            "type": "number"
+          },
+          "largest_claim_dkk": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "null when claim_count is 0.",
+            "title": "Largest Claim Dkk"
+          },
+          "loss_ratio": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "incurred_loss_dkk / earned_premium_dkk; null when earned premium is 0.",
+            "title": "Loss Ratio"
+          },
+          "peril": {
+            "$ref": "#/components/schemas/Peril"
+          },
+          "policy_count": {
+            "minimum": 0.0,
+            "title": "Policy Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "peril",
+          "policy_count",
+          "earned_premium_dkk",
+          "incurred_loss_dkk",
+          "loss_ratio",
+          "claim_count",
+          "largest_claim_dkk"
+        ],
+        "title": "PerilLossExperienceOut",
+        "type": "object"
+      },
+      "PortfolioLossExperienceOut": {
+        "properties": {
+          "exclusions": {
+            "description": "Source Claims left out of every result, one row per reason.",
+            "items": {
+              "$ref": "#/components/schemas/ExclusionOut"
+            },
+            "title": "Exclusions",
+            "type": "array"
+          },
+          "perils": {
+            "description": "Every Peril, always listed.",
+            "items": {
+              "$ref": "#/components/schemas/PerilLossExperienceOut"
+            },
+            "title": "Perils",
+            "type": "array"
+          },
+          "portfolio_id": {
+            "title": "Portfolio Id",
             "type": "string"
           }
         },
         "required": [
-          "source"
+          "portfolio_id",
+          "perils",
+          "exclusions"
         ],
-        "title": "ProvenanceOut",
+        "title": "PortfolioLossExperienceOut",
         "type": "object"
-      },
-      "Status": {
-        "enum": [
-          "ok",
-          "insufficient_data"
-        ],
-        "title": "Status",
-        "type": "string"
       },
       "ValidationError": {
         "properties": {
@@ -132,7 +207,7 @@
     }
   },
   "info": {
-    "title": "the company task",
+    "title": "the company loss experience",
     "version": "1.0.0"
   },
   "openapi": "3.1.0",
@@ -155,16 +230,16 @@
         "summary": "Health"
       }
     },
-    "/v1/assets/{asset_id}/assessment": {
+    "/portfolios/{portfolio_id}/loss-experience": {
       "get": {
-        "operationId": "get_assessment_v1_assets__asset_id__assessment_get",
+        "operationId": "get_loss_experience_portfolios__portfolio_id__loss_experience_get",
         "parameters": [
           {
             "in": "path",
-            "name": "asset_id",
+            "name": "portfolio_id",
             "required": true,
             "schema": {
-              "title": "Asset Id",
+              "title": "Portfolio Id",
               "type": "string"
             }
           }
@@ -174,14 +249,14 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/AssessmentOut"
+                  "$ref": "#/components/schemas/PortfolioLossExperienceOut"
                 }
               }
             },
             "description": "Successful Response"
           },
           "404": {
-            "description": "Unknown asset"
+            "description": "No Asset belongs to this Portfolio"
           },
           "422": {
             "content": {
@@ -194,7 +269,7 @@
             "description": "Validation Error"
           }
         },
-        "summary": "Get Assessment"
+        "summary": "Get Loss Experience"
       }
     }
   }

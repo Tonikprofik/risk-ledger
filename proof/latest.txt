@@ -1,4 +1,26 @@
-data: data/sample/observations.csv  min_coverage: 0.5
-F1	ok	value=0.6100	coverage=0.75
-F2	insufficient_data	value=-	coverage=0.25
-F3	ok	value=0.0000	coverage=1.00
+data: data/sample
+PF-01	fire	policies=0	premium_dkk=0.00	incurred_dkk=0.00	ratio=null	claims=0	largest_dkk=null
+PF-01	flood	policies=1	premium_dkk=12000.00	incurred_dkk=13000.00	ratio=1.0833	claims=3	largest_dkk=8000.00
+PF-01	hail	policies=0	premium_dkk=0.00	incurred_dkk=0.00	ratio=null	claims=0	largest_dkk=null
+PF-01	storm	policies=2	premium_dkk=20500.00	incurred_dkk=16000.00	ratio=0.7805	claims=2	largest_dkk=10000.00
+PF-01	subsidence	policies=1	premium_dkk=3000.00	incurred_dkk=0.00	ratio=0.0000	claims=0	largest_dkk=null
+PF-02	fire	policies=1	premium_dkk=5000.00	incurred_dkk=7470.00	ratio=1.4940	claims=2	largest_dkk=7470.00
+PF-02	flood	policies=0	premium_dkk=0.00	incurred_dkk=0.00	ratio=null	claims=0	largest_dkk=null
+PF-02	hail	policies=2	premium_dkk=30555.50	incurred_dkk=7457.50	ratio=0.2441	claims=2	largest_dkk=3730.00
+PF-02	storm	policies=1	premium_dkk=4000.00	incurred_dkk=4000.00	ratio=1.0000	claims=1	largest_dkk=4000.00
+PF-02	subsidence	policies=0	premium_dkk=0.00	incurred_dkk=0.00	ratio=null	claims=0	largest_dkk=null
+PF-03	fire	policies=0	premium_dkk=0.00	incurred_dkk=0.00	ratio=null	claims=0	largest_dkk=null
+PF-03	flood	policies=0	premium_dkk=0.00	incurred_dkk=0.00	ratio=null	claims=0	largest_dkk=null
+PF-03	hail	policies=0	premium_dkk=0.00	incurred_dkk=0.00	ratio=null	claims=0	largest_dkk=null
+PF-03	storm	policies=0	premium_dkk=0.00	incurred_dkk=0.00	ratio=null	claims=0	largest_dkk=null
+PF-03	subsidence	policies=0	premium_dkk=0.00	incurred_dkk=0.00	ratio=null	claims=0	largest_dkk=null
+loaded	assets=7	policies=8	claims=10
+excluded	policy_not_found	claims=1	amount_dkk=8952.00
+excluded	negative_paid_amount	claims=1	amount_dkk=-2500.00
+repaired	peril_spellings	policies=3
+repaired	day_first_loss_dates	claims=2
+repaired	day_first_reported_dates	claims=2
+flagged	loss_before_inception	claims=1
+flagged	settled_with_reserve	claims=1	reserve_dkk=1500.00
+flagged	mixed_currency	claims=1
+flagged	overlapping_terms	policies=1

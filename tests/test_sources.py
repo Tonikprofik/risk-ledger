@@ -82,3 +82,57 @@ def test_missing_column_fails_naming_the_file(tmp_path: Path) -> None:
 
 def test_loading_twice_gives_an_equal_book() -> None:
     assert load_book(SAMPLE) == BOOK
+
+
+CLAIM_HEADER = (
+    "claim_id,policy_id,loss_date,reported_date,paid_amount,reserve_amount,currency,status"
+)
+POLICY_HEADER = "policy_id,asset_id,peril,inception_date,expiry_date,annual_premium,currency"
+
+
+@pytest.mark.parametrize(
+    "row",
+    [
+        "CLM-1,POL-500001,13-13-2024,2023-09-30,100.00,0.00,DKK,settled",
+        "CLM-1,POL-500001,2023-09-12,2023-09-30,,0.00,DKK,settled",
+        "CLM-1,POL-500001,2023-09-12,2023-09-30,100.00,0.00,DKK,paid",
+    ],
+    ids=["impossible-date", "blank-paid", "unknown-status"],
+)
+def test_malformed_claim_value_fails_naming_file_and_line(tmp_path: Path, row: str) -> None:
+    data = shutil.copytree(SAMPLE, tmp_path / "data")
+    (data / "claims.csv").write_text(f"{CLAIM_HEADER}\n{row}\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match=r"claims\.csv:\d+:"):
+        load_book(data)
+
+
+@pytest.mark.parametrize(
+    ("file", "content", "message"),
+    [
+        (
+            "policies.csv",
+            f"{POLICY_HEADER}\nPOL-1,AST-999999,fire,2023-06-01,2024-05-31,100.00,DKK\n",
+            r"policies\.csv: 1 policies name an asset_id not in assets\.csv, first \['POL-1'\]",
+        ),
+        (
+            "policies.csv",
+            f"{POLICY_HEADER}\nPOL-1,AST-100000,fire,2023-10-01,2024-09-30,100.00,DKK\n",
+            r"policies\.csv POL-1: no DKK rate for 2023-10",
+        ),
+        (
+            "claims.csv",
+            f"{CLAIM_HEADER}\nCLM-1,POL-500001,2023-10-02,2023-10-05,100.00,0.00,EUR,settled\n",
+            r"claims\.csv CLM-1: no EUR rate for 2023-10",
+        ),
+    ],
+    ids=["unknown-asset", "premium-fx-gap", "claim-fx-gap"],
+)
+def test_broken_reference_fails_the_load_naming_the_row(
+    tmp_path: Path, file: str, content: str, message: str
+) -> None:
+    data = shutil.copytree(SAMPLE, tmp_path / "data")
+    (data / file).write_text(content, encoding="utf-8")
+
+    with pytest.raises(ValueError, match=message):
+        load_book(data)

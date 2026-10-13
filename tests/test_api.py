@@ -1,51 +1,142 @@
 import json
+from dataclasses import replace
+from datetime import date
 from pathlib import Path
 
 from fastapi.testclient import TestClient
 
 from loss_experience.api import create_app
-from loss_experience.domain import Observations, Provenance
+from loss_experience.domain import Claim, ClaimStatus, Currency, Peril, Policy
+from loss_experience.sources import load_book
 
-SNAPSHOT = Path(__file__).parent.parent / "docs" / "openapi.json"
+ROOT = Path(__file__).parent.parent
+SNAPSHOT = ROOT / "docs" / "openapi.json"
+SAMPLE_BOOK = load_book(ROOT / "data" / "sample")
 
-
-class InMemorySource:
-    def __init__(self, **values: tuple[float | None, ...]) -> None:
-        self._values = values
-
-    def observations(self, asset_id: str) -> Observations | None:
-        values = self._values.get(asset_id)
-        return None if values is None else Observations(asset_id, values, Provenance("memory"))
-
-    def all_observations(self) -> list[Observations]:
-        return []
-
-
-app = create_app(InMemorySource(F1=(0.6, 0.8), F2=(None, None, 0.4)))
+app = create_app(SAMPLE_BOOK)
 client = TestClient(app)
 
 
-def test_known_asset_with_data_is_ok_with_value() -> None:
-    response = client.get("/v1/assets/F1/assessment")
+def by_peril(body: dict[str, list[dict[str, object]]]) -> dict[str, dict[str, object]]:
+    return {str(item["peril"]): item for item in body["perils"]}
+
+
+def test_known_portfolio_lists_every_peril_with_its_figures_and_exclusions() -> None:
+    # PF-01 holds POL-500001 and -500005 (storm, 10,000 + 10,500 DKK), POL-500002 (flood,
+    # 12,000 DKK) and POL-500006 (subsidence, 3,000 DKK). Storm: settled 10,000 and 6,000 (its
+    # reserve ignored). Flood: settled 8,000, open 2,000 + 3,000, withdrawn 0. Subsidence's only
+    # claim is the negative-paid exclusion; the orphan (1,200 EUR at 7.46) shows in every result.
+    response = client.get("/portfolios/PF-01/loss-experience")
 
     assert response.status_code == 200
     assert response.json() == {
-        "asset_id": "F1",
-        "status": "ok",
-        "value": 0.7,
-        "coverage_fraction": 1.0,
-        "provenance": {"source": "memory"},
+        "portfolio_id": "PF-01",
+        "perils": [
+            {
+                "peril": "fire",
+                "policy_count": 0,
+                "earned_premium_dkk": 0.0,
+                "incurred_loss_dkk": 0.0,
+                "loss_ratio": None,
+                "claim_count": 0,
+                "largest_claim_dkk": None,
+            },
+            {
+                "peril": "flood",
+                "policy_count": 1,
+                "earned_premium_dkk": 12000.0,
+                "incurred_loss_dkk": 13000.0,
+                "loss_ratio": 1.0833,
+                "claim_count": 3,
+                "largest_claim_dkk": 8000.0,
+            },
+            {
+                "peril": "hail",
+                "policy_count": 0,
+                "earned_premium_dkk": 0.0,
+                "incurred_loss_dkk": 0.0,
+                "loss_ratio": None,
+                "claim_count": 0,
+                "largest_claim_dkk": None,
+            },
+            {
+                "peril": "storm",
+                "policy_count": 2,
+                "earned_premium_dkk": 20500.0,
+                "incurred_loss_dkk": 16000.0,
+                "loss_ratio": 0.7805,
+                "claim_count": 2,
+                "largest_claim_dkk": 10000.0,
+            },
+            {
+                "peril": "subsidence",
+                "policy_count": 1,
+                "earned_premium_dkk": 3000.0,
+                "incurred_loss_dkk": 0.0,
+                "loss_ratio": 0.0,
+                "claim_count": 0,
+                "largest_claim_dkk": None,
+            },
+        ],
+        "exclusions": [
+            {"reason": "policy_not_found", "claim_count": 1, "amount_dkk": 8952.0},
+            {"reason": "negative_paid_amount", "claim_count": 1, "amount_dkk": -2500.0},
+        ],
     }
 
 
-def test_mostly_nodata_is_200_with_status_and_no_value() -> None:
-    body = client.get("/v1/assets/F2/assessment").json()
-
-    assert (body["status"], body["value"]) == ("insufficient_data", None)
+def test_unknown_portfolio_is_404() -> None:
+    assert client.get("/portfolios/PF-99/loss-experience").status_code == 404
 
 
-def test_unknown_asset_is_404() -> None:
-    assert client.get("/v1/assets/F9/assessment").status_code == 404
+def test_eur_claim_on_dkk_policy_converts_at_the_eur_rate_of_its_loss_month() -> None:
+    # POL-500004 is a 5,000 DKK fire policy; CLM-900004 is 1,000 EUR lost in 2023-09 (7.47),
+    # CLM-900008 is declined and counts with 0.
+    fire = by_peril(client.get("/portfolios/PF-02/loss-experience").json())["fire"]
+
+    assert (fire["incurred_loss_dkk"], fire["loss_ratio"], fire["largest_claim_dkk"]) == (
+        7470.0,
+        1.494,
+        7470.0,
+    )
+
+
+def test_negative_paid_exclusion_shows_only_in_its_own_portfolio() -> None:
+    body = client.get("/portfolios/PF-02/loss-experience").json()
+
+    assert body["exclusions"] == [
+        {"reason": "policy_not_found", "claim_count": 1, "amount_dkk": 8952.0},
+        {"reason": "negative_paid_amount", "claim_count": 0, "amount_dkk": 0.0},
+    ]
+
+
+def test_zero_earned_premium_gives_a_null_ratio_not_zero() -> None:
+    free = Policy(
+        "POL-1", "AST-100006", Peril.FIRE, date(2023, 6, 1), date(2024, 5, 31), 0.0, Currency.DKK
+    )
+    paid = Claim(
+        "CLM-1",
+        "POL-1",
+        date(2023, 9, 2),
+        date(2023, 9, 10),
+        250.0,
+        0.0,
+        Currency.DKK,
+        ClaimStatus.SETTLED,
+    )
+    book = replace(SAMPLE_BOOK, policies=(free,), claims=(paid,))
+
+    body = TestClient(create_app(book)).get("/portfolios/PF-03/loss-experience").json()
+
+    assert by_peril(body)["fire"] == {
+        "peril": "fire",
+        "policy_count": 1,
+        "earned_premium_dkk": 0.0,
+        "incurred_loss_dkk": 250.0,
+        "loss_ratio": None,
+        "claim_count": 1,
+        "largest_claim_dkk": 250.0,
+    }
 
 
 def test_openapi_matches_published_contract() -> None:
