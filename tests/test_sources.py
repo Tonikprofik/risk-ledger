@@ -1,36 +1,84 @@
+import shutil
+from datetime import date
 from pathlib import Path
 
 import pytest
 
-from loss_experience.sources import CsvObservationSource
+from loss_experience.domain import (
+    Claim,
+    DataQuality,
+    ExclusionReason,
+    Peril,
+    incurred_loss_dkk,
+)
+from loss_experience.sources import load_book
+
+SAMPLE = Path(__file__).parent.parent / "data" / "sample"
+BOOK = load_book(SAMPLE)
 
 
-def write_csv(tmp_path: Path, text: str) -> Path:
-    path = tmp_path / "observations.csv"
-    path.write_text(text, encoding="utf-8")
-    return path
+def claim(claim_id: str) -> Claim:
+    return next(claim for claim in BOOK.claims if claim.claim_id == claim_id)
 
 
-def test_empty_nan_and_sentinel_cells_become_nodata(tmp_path: Path) -> None:
-    path = write_csv(tmp_path, "asset_id,value\nF1,0.5\nF1,\nF1,nan\nF1,-9999\nF1,0\n")
-
-    found = CsvObservationSource(path, nodata=-9999).observations("F1")
-
-    assert found is not None
-    assert found.values == (0.5, None, None, None, 0.0)
-
-
-def test_unknown_asset_is_none(tmp_path: Path) -> None:
-    source = CsvObservationSource(write_csv(tmp_path, "asset_id,value\nF1,0.5\n"))
-
-    assert source.observations("F9") is None
+def test_orphan_and_negative_paid_claims_are_excluded_with_their_dkk_amount() -> None:
+    # The orphan is 1,200 EUR lost in 2023-06 (EUR 7.46); the negative one is -2,500 DKK.
+    assert [(e.reason, e.claim_id, round(e.amount_dkk, 2)) for e in BOOK.exclusions] == [
+        (ExclusionReason.POLICY_NOT_FOUND, "CLM-900010", 8952.0),
+        (ExclusionReason.NEGATIVE_PAID_AMOUNT, "CLM-900011", -2500.0),
+    ]
 
 
-def test_missing_column_fails_at_load(tmp_path: Path) -> None:
-    with pytest.raises(ValueError, match=r"lacks columns \['value'\]"):
-        CsvObservationSource(write_csv(tmp_path, "asset_id,ndvi\nF1,0.5\n"))
+def test_excluded_claims_are_not_claims_of_the_book() -> None:
+    claim_ids = {claim.claim_id for claim in BOOK.claims}
+
+    assert len(BOOK.claims) == 10
+    assert {"CLM-900010", "CLM-900011"}.isdisjoint(claim_ids)
 
 
-def test_non_numeric_value_names_the_line(tmp_path: Path) -> None:
-    with pytest.raises(ValueError, match=r"observations\.csv:3"):
-        CsvObservationSource(write_csv(tmp_path, "asset_id,value\nF1,0.5\nF1,high\n"))
+def test_repairs_and_flags_are_counted() -> None:
+    assert BOOK.data_quality == DataQuality(
+        peril_spellings_repaired=3,
+        day_first_loss_dates_repaired=2,
+        day_first_reported_dates_repaired=2,
+        loss_before_inception_flagged=1,
+        settled_with_reserve_flagged=1,
+        settled_reserve_dkk=1500.0,
+        mixed_currency_claims=1,
+        overlapping_terms=1,
+    )
+
+
+def test_padded_and_mixed_case_perils_are_normalised() -> None:
+    peril_of = {policy.policy_id: policy.peril for policy in BOOK.policies}
+
+    assert [peril_of["POL-500002"], peril_of["POL-500003"], peril_of["POL-500007"]] == [
+        Peril.FLOOD,
+        Peril.HAIL,
+        Peril.STORM,
+    ]
+
+
+def test_eur_claim_on_dkk_policy_converts_at_the_eur_rate_of_its_own_loss_month() -> None:
+    # 1,000 EUR lost 2023-09 (EUR 7.47); its policy is DKK and incepted 2023-03 (EUR 7.45).
+    assert round(incurred_loss_dkk(claim("CLM-900004"), BOOK.fx), 2) == 7470.0
+
+
+def test_day_first_dates_parse_as_day_month_year() -> None:
+    assert claim("CLM-900002").loss_date == date(2023, 6, 15)
+    assert claim("CLM-900003").reported_date == date(2023, 7, 5)
+
+
+def test_missing_column_fails_naming_the_file(tmp_path: Path) -> None:
+    data = shutil.copytree(SAMPLE, tmp_path / "data")
+    (data / "claims.csv").write_text(
+        "claim_id,policy_id,loss_date,reported_date,paid_amount,reserve_amount,currency\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match=r"claims\.csv lacks columns \['status'\]"):
+        load_book(data)
+
+
+def test_loading_twice_gives_an_equal_book() -> None:
+    assert load_book(SAMPLE) == BOOK
