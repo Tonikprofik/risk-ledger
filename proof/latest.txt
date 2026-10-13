@@ -1,0 +1,4 @@
+data: data/sample/observations.csv  min_coverage: 0.5
+F1	ok	value=0.6100	coverage=0.75
+F2	insufficient_data	value=-	coverage=0.25
+F3	ok	value=0.0000	coverage=1.00

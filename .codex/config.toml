@@ -1,0 +1,4 @@
+# Project layer over ~/.codex/config.toml. Agents live in .codex/agents/.
+[agents]
+max_threads = 4   # parallel readers; writers only on disjoint files (AGENTS.md)
+max_depth = 1     # subagents never spawn subagents
