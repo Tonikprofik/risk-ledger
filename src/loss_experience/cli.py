@@ -32,16 +32,10 @@ from loss_experience.domain import (
     rank_portfolios,
     repair_counts,
 )
-from loss_experience.sources import load_book
+from loss_experience.sources import SAMPLE_DATA, default_data, load_book
 
-DEFAULT_DATA = Path("data")
-SAMPLE_DATA = DEFAULT_DATA / "sample"
 PROOF = Path("proof/latest.txt")
 EMPTY_BOOK = Book((), (), (), FxTable({}), (), DataQuality(0, 0, 0, 0, 0, 0.0, 0, 0))
-
-
-def default_data() -> Path:
-    return DEFAULT_DATA if any(DEFAULT_DATA.glob("*.csv")) else SAMPLE_DATA
 
 
 def _or_null(value: float | None, spec: str) -> str:
@@ -136,7 +130,12 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(create_app(EMPTY_BOOK).openapi(), indent=2, sort_keys=True))
         return 0
 
-    data: Path = args.data if args.data is not None else default_data()
+    if args.data is not None:
+        data: Path = args.data
+    elif args.command == "proof":
+        data = SAMPLE_DATA  # the proof is the committed baseline, so it never follows local data
+    else:
+        data = default_data()
     book = load_book(data)
     if args.command == "portfolio":
         portfolio_id: str = args.portfolio_id

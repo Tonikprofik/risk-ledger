@@ -63,6 +63,15 @@ type Row = Mapping[str, str]
 type FxKey = tuple[int, int, Currency]
 
 
+DEFAULT_DATA = Path("data")
+SAMPLE_DATA = DEFAULT_DATA / "sample"
+
+
+def default_data() -> Path:
+    """`data` when it holds CSVs, else the committed `data/sample`."""
+    return DEFAULT_DATA if any(DEFAULT_DATA.glob("*.csv")) else SAMPLE_DATA
+
+
 def load_book(data_dir: Path) -> Book:
     """assets.csv, policies.csv, claims.csv and fx_rates.csv from `data_dir`. No state: the
     same files give an equal Book."""

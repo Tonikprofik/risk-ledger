@@ -29,7 +29,7 @@ from loss_experience.domain import (
     rank_portfolios,
     repair_counts,
 )
-from loss_experience.sources import load_book
+from loss_experience.sources import default_data, load_book
 
 DKK_DECIMALS = 2
 RATIO_DECIMALS = 4
@@ -226,5 +226,9 @@ def create_app(book: Book) -> FastAPI:
 
 
 def app_from_env() -> FastAPI:
-    """Entry point for `uvicorn --factory loss_experience.api:app_from_env`; reads LOSS_DATA."""
-    return create_app(load_book(Path(os.environ.get("LOSS_DATA", "data"))))
+    """Entry point for `uvicorn --factory loss_experience.api:app_from_env`.
+
+    Reads LOSS_DATA; without it, `data` when it holds CSVs, else `data/sample`.
+    """
+    env = os.environ.get("LOSS_DATA")
+    return create_app(load_book(Path(env) if env else default_data()))
