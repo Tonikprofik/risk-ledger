@@ -1,6 +1,46 @@
 {
   "components": {
     "schemas": {
+      "DataQualityOut": {
+        "description": "The whole book: what was loaded, excluded, repaired at load, and kept but flagged.",
+        "properties": {
+          "exclusions": {
+            "description": "Every excluded source Claim of the book, one row per reason.",
+            "items": {
+              "$ref": "#/components/schemas/ExclusionOut"
+            },
+            "title": "Exclusions",
+            "type": "array"
+          },
+          "flags": {
+            "description": "Rows kept as they are and reported.",
+            "items": {
+              "$ref": "#/components/schemas/FlagCountOut"
+            },
+            "title": "Flags",
+            "type": "array"
+          },
+          "loaded": {
+            "$ref": "#/components/schemas/LoadedCountsOut"
+          },
+          "repairs": {
+            "description": "Values changed at load, rows kept.",
+            "items": {
+              "$ref": "#/components/schemas/RepairCountOut"
+            },
+            "title": "Repairs",
+            "type": "array"
+          }
+        },
+        "required": [
+          "loaded",
+          "exclusions",
+          "repairs",
+          "flags"
+        ],
+        "title": "DataQualityOut",
+        "type": "object"
+      },
       "ExclusionOut": {
         "description": "policy_not_found is book-wide (no Policy, so no Portfolio); the rest are this Portfolio's.",
         "properties": {
@@ -34,6 +74,49 @@
         "title": "ExclusionReason",
         "type": "string"
       },
+      "FlagCountOut": {
+        "properties": {
+          "amount_dkk": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The reserve still carried by settled_with_reserve Claims (not incurred loss); null for the kinds that record no DKK amount.",
+            "title": "Amount Dkk"
+          },
+          "count": {
+            "description": "Policies for overlapping_terms, Claims otherwise.",
+            "minimum": 0.0,
+            "title": "Count",
+            "type": "integer"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/FlagKind"
+          }
+        },
+        "required": [
+          "kind",
+          "count",
+          "amount_dkk"
+        ],
+        "title": "FlagCountOut",
+        "type": "object"
+      },
+      "FlagKind": {
+        "description": "What load kept as it is but reports, because it does not change a result (D14).",
+        "enum": [
+          "loss_before_inception",
+          "settled_with_reserve",
+          "mixed_currency",
+          "overlapping_terms"
+        ],
+        "title": "FlagKind",
+        "type": "string"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -58,6 +141,40 @@
           "status"
         ],
         "title": "Health",
+        "type": "object"
+      },
+      "LoadedCountsOut": {
+        "properties": {
+          "assets": {
+            "minimum": 0.0,
+            "title": "Assets",
+            "type": "integer"
+          },
+          "claims": {
+            "description": "Claims kept; excluded Claims are in exclusions.",
+            "minimum": 0.0,
+            "title": "Claims",
+            "type": "integer"
+          },
+          "fx_rates": {
+            "description": "Monthly rates, one per month and currency.",
+            "minimum": 0.0,
+            "title": "Fx Rates",
+            "type": "integer"
+          },
+          "policies": {
+            "minimum": 0.0,
+            "title": "Policies",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "assets",
+          "policies",
+          "claims",
+          "fx_rates"
+        ],
+        "title": "LoadedCountsOut",
         "type": "object"
       },
       "Peril": {
@@ -245,6 +362,35 @@
         "title": "PortfolioTotalOut",
         "type": "object"
       },
+      "RepairCountOut": {
+        "properties": {
+          "count": {
+            "description": "Policies for peril_spellings, Claims for the day-first dates.",
+            "minimum": 0.0,
+            "title": "Count",
+            "type": "integer"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/RepairKind"
+          }
+        },
+        "required": [
+          "kind",
+          "count"
+        ],
+        "title": "RepairCountOut",
+        "type": "object"
+      },
+      "RepairKind": {
+        "description": "What load changed into its canonical form; a Repair never removes a row.",
+        "enum": [
+          "peril_spellings",
+          "day_first_loss_dates",
+          "day_first_reported_dates"
+        ],
+        "title": "RepairKind",
+        "type": "string"
+      },
       "ValidationError": {
         "properties": {
           "ctx": {
@@ -293,6 +439,24 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/data-quality": {
+      "get": {
+        "operationId": "get_data_quality_data_quality_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DataQualityOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Data Quality"
+      }
+    },
     "/health": {
       "get": {
         "operationId": "health_health_get",

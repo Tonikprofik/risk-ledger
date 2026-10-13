@@ -112,6 +112,76 @@ class DataQuality:
     overlapping_terms: int
 
 
+class RepairKind(StrEnum):
+    """What load changed into its canonical form; a Repair never removes a row."""
+
+    PERIL_SPELLINGS = "peril_spellings"
+    DAY_FIRST_LOSS_DATES = "day_first_loss_dates"
+    DAY_FIRST_REPORTED_DATES = "day_first_reported_dates"
+
+
+class FlagKind(StrEnum):
+    """What load kept as it is but reports, because it does not change a result (D14)."""
+
+    LOSS_BEFORE_INCEPTION = "loss_before_inception"
+    SETTLED_WITH_RESERVE = "settled_with_reserve"
+    MIXED_CURRENCY = "mixed_currency"
+    OVERLAPPING_TERMS = "overlapping_terms"
+
+
+@dataclass(frozen=True)
+class RepairCount:
+    kind: RepairKind
+    count: int
+
+
+@dataclass(frozen=True)
+class FlagCount:
+    """`amount_dkk` is None where the count has no DKK amount recorded."""
+
+    kind: FlagKind
+    count: int
+    amount_dkk: float | None
+
+
+def repair_counts(quality: DataQuality) -> tuple[RepairCount, ...]:
+    """One count per RepairKind in enum order, including kinds with no rows."""
+    return tuple(RepairCount(kind, _repaired(quality, kind)) for kind in RepairKind)
+
+
+def _repaired(quality: DataQuality, kind: RepairKind) -> int:
+    match kind:
+        case RepairKind.PERIL_SPELLINGS:
+            return quality.peril_spellings_repaired
+        case RepairKind.DAY_FIRST_LOSS_DATES:
+            return quality.day_first_loss_dates_repaired
+        case RepairKind.DAY_FIRST_REPORTED_DATES:
+            return quality.day_first_reported_dates_repaired
+        case _:
+            assert_never(kind)
+
+
+def flag_counts(quality: DataQuality) -> tuple[FlagCount, ...]:
+    """One count per FlagKind in enum order, including kinds with no rows."""
+    return tuple(_flagged(quality, kind) for kind in FlagKind)
+
+
+def _flagged(quality: DataQuality, kind: FlagKind) -> FlagCount:
+    match kind:
+        case FlagKind.LOSS_BEFORE_INCEPTION:
+            return FlagCount(kind, quality.loss_before_inception_flagged, None)
+        case FlagKind.SETTLED_WITH_RESERVE:
+            return FlagCount(
+                kind, quality.settled_with_reserve_flagged, quality.settled_reserve_dkk
+            )
+        case FlagKind.MIXED_CURRENCY:
+            return FlagCount(kind, quality.mixed_currency_claims, None)
+        case FlagKind.OVERLAPPING_TERMS:
+            return FlagCount(kind, quality.overlapping_terms, None)
+        case _:
+            assert_never(kind)
+
+
 @dataclass(frozen=True)
 class Book:
     """Everything loaded. Every Claim names a known Policy; excluded Claims are only Exclusions."""

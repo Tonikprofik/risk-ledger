@@ -132,6 +132,78 @@ def test_ranking_puts_a_portfolio_without_premium_last_with_a_null_ratio() -> No
     )
 
 
+def test_ranking_breaks_an_equal_ratio_by_the_larger_incurred_loss() -> None:
+    # Both 0.5: PF-02 500 / 1,000 and PF-03 1,000 / 2,000. By portfolio_id alone PF-02 would
+    # come first; the larger incurred loss puts PF-03 ahead. PF-01 has no Policy: last.
+    policies = tuple(
+        Policy(
+            policy_id,
+            asset_id,
+            Peril.FIRE,
+            date(2023, 6, 1),
+            date(2024, 5, 31),
+            premium,
+            Currency.DKK,
+        )
+        for policy_id, asset_id, premium in (
+            ("POL-2", "AST-100002", 1000.0),
+            ("POL-3", "AST-100006", 2000.0),
+        )
+    )
+    claims = tuple(
+        Claim(
+            claim_id,
+            policy_id,
+            date(2023, 9, 2),
+            date(2023, 9, 10),
+            paid,
+            0.0,
+            Currency.DKK,
+            ClaimStatus.SETTLED,
+        )
+        for claim_id, policy_id, paid in (("CLM-2", "POL-2", 500.0), ("CLM-3", "POL-3", 1000.0))
+    )
+    book = replace(SAMPLE_BOOK, policies=policies, claims=claims)
+
+    body = TestClient(create_app(book)).get("/portfolios/loss-experience").json()
+
+    assert [
+        (item["portfolio_id"], item["total"]["loss_ratio"], item["total"]["incurred_loss_dkk"])
+        for item in body["portfolios"]
+    ] == [("PF-03", 0.5, 1000.0), ("PF-02", 0.5, 500.0), ("PF-01", None, 0.0)]
+
+
+def test_data_quality_reports_the_book_wide_exclusions_repairs_and_flags() -> None:
+    # The sample has one orphan (CLM-900010, 1,200 EUR at 7.46) and one negative paid claim
+    # (CLM-900011), the same two Exclusions as the Book; three padded or mixed-case perils; two
+    # day-first loss and reported dates; CLM-900006 settled with a 1,500 DKK reserve.
+    response = client.get("/data-quality")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "loaded": {"assets": 7, "policies": 8, "claims": 10, "fx_rates": 10},
+        "exclusions": [
+            {"reason": "policy_not_found", "claim_count": 1, "amount_dkk": 8952.0},
+            {"reason": "negative_paid_amount", "claim_count": 1, "amount_dkk": -2500.0},
+        ],
+        "repairs": [
+            {"kind": "peril_spellings", "count": 3},
+            {"kind": "day_first_loss_dates", "count": 2},
+            {"kind": "day_first_reported_dates", "count": 2},
+        ],
+        "flags": [
+            {"kind": "loss_before_inception", "count": 1, "amount_dkk": None},
+            {"kind": "settled_with_reserve", "count": 1, "amount_dkk": 1500.0},
+            {"kind": "mixed_currency", "count": 1, "amount_dkk": None},
+            {"kind": "overlapping_terms", "count": 1, "amount_dkk": None},
+        ],
+    }
+    assert sorted((e.reason, e.claim_id) for e in SAMPLE_BOOK.exclusions) == [
+        ("negative_paid_amount", "CLM-900011"),
+        ("policy_not_found", "CLM-900010"),
+    ]
+
+
 def test_eur_claim_on_dkk_policy_converts_at_the_eur_rate_of_its_loss_month() -> None:
     # POL-500004 is a 5,000 DKK fire policy; CLM-900004 is 1,000 EUR lost in 2023-09 (7.47),
     # CLM-900008 is declined and counts with 0.

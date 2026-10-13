@@ -16,16 +16,21 @@ import argparse
 import json
 import sys
 from pathlib import Path
+from typing import assert_never
 
 from loss_experience.api import PortfolioLossExperienceOut, create_app
 from loss_experience.domain import (
     Book,
     DataQuality,
+    FlagKind,
     FxTable,
     PerilLossExperience,
+    RepairKind,
     exclusion_summaries,
+    flag_counts,
     loss_experience,
     rank_portfolios,
+    repair_counts,
 )
 from loss_experience.sources import load_book
 
@@ -75,27 +80,43 @@ def portfolio_lines(book: Book) -> list[str]:
     return lines
 
 
+def _counted(kind: RepairKind | FlagKind) -> str:
+    """The rows a repair or flag count is of."""
+    match kind:
+        case RepairKind.PERIL_SPELLINGS | FlagKind.OVERLAPPING_TERMS:
+            return "policies"
+        case (
+            RepairKind.DAY_FIRST_LOSS_DATES
+            | RepairKind.DAY_FIRST_REPORTED_DATES
+            | FlagKind.LOSS_BEFORE_INCEPTION
+            | FlagKind.SETTLED_WITH_RESERVE
+            | FlagKind.MIXED_CURRENCY
+        ):
+            return "claims"
+        case _:
+            assert_never(kind)
+
+
 def quality_lines(book: Book) -> list[str]:
-    lines = [
-        f"loaded\tassets={len(book.assets)}\tpolicies={len(book.policies)}"
-        f"\tclaims={len(book.claims)}"
-    ]
-    lines.extend(
-        f"excluded\t{summary.reason}\tclaims={summary.claim_count}"
-        f"\tamount_dkk={summary.amount_dkk:.2f}"
-        for summary in exclusion_summaries(book.exclusions)
-    )
-    quality = book.data_quality
+    """The data the API's /data-quality serves, one line per count. The only flag amount is the
+    settled_with_reserve reserve, hence its label."""
     return [
-        *lines,
-        f"repaired\tperil_spellings\tpolicies={quality.peril_spellings_repaired}",
-        f"repaired\tday_first_loss_dates\tclaims={quality.day_first_loss_dates_repaired}",
-        f"repaired\tday_first_reported_dates\tclaims={quality.day_first_reported_dates_repaired}",
-        f"flagged\tloss_before_inception\tclaims={quality.loss_before_inception_flagged}",
-        f"flagged\tsettled_with_reserve\tclaims={quality.settled_with_reserve_flagged}"
-        f"\treserve_dkk={quality.settled_reserve_dkk:.2f}",
-        f"flagged\tmixed_currency\tclaims={quality.mixed_currency_claims}",
-        f"flagged\toverlapping_terms\tpolicies={quality.overlapping_terms}",
+        f"loaded\tassets={len(book.assets)}\tpolicies={len(book.policies)}"
+        f"\tclaims={len(book.claims)}",
+        *(
+            f"excluded\t{summary.reason}\tclaims={summary.claim_count}"
+            f"\tamount_dkk={summary.amount_dkk:.2f}"
+            for summary in exclusion_summaries(book.exclusions)
+        ),
+        *(
+            f"repaired\t{repair.kind}\t{_counted(repair.kind)}={repair.count}"
+            for repair in repair_counts(book.data_quality)
+        ),
+        *(
+            f"flagged\t{flag.kind}\t{_counted(flag.kind)}={flag.count}"
+            + ("" if flag.amount_dkk is None else f"\treserve_dkk={flag.amount_dkk:.2f}")
+            for flag in flag_counts(book.data_quality)
+        ),
     ]
 
 

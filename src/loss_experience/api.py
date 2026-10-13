@@ -15,12 +15,19 @@ from loss_experience.domain import (
     Book,
     ExclusionReason,
     ExclusionSummary,
+    FlagCount,
+    FlagKind,
     Peril,
     PerilLossExperience,
     PortfolioLossExperience,
     PortfolioTotal,
+    RepairCount,
+    RepairKind,
+    exclusion_summaries,
+    flag_counts,
     loss_experience,
     rank_portfolios,
+    repair_counts,
 )
 from loss_experience.sources import load_book
 
@@ -121,6 +128,67 @@ class PortfolioRankingOut(BaseModel):
     )
 
 
+class LoadedCountsOut(BaseModel):
+    assets: int = Field(ge=0)
+    policies: int = Field(ge=0)
+    claims: int = Field(ge=0, description="Claims kept; excluded Claims are in exclusions.")
+    fx_rates: int = Field(ge=0, description="Monthly rates, one per month and currency.")
+
+
+class RepairCountOut(BaseModel):
+    kind: RepairKind
+    count: int = Field(
+        ge=0, description="Policies for peril_spellings, Claims for the day-first dates."
+    )
+
+    @classmethod
+    def from_domain(cls, repair: RepairCount) -> "RepairCountOut":
+        return cls(kind=repair.kind, count=repair.count)
+
+
+class FlagCountOut(BaseModel):
+    kind: FlagKind
+    count: int = Field(ge=0, description="Policies for overlapping_terms, Claims otherwise.")
+    amount_dkk: float | None = Field(
+        description="The reserve still carried by settled_with_reserve Claims (not incurred "
+        "loss); null for the kinds that record no DKK amount."
+    )
+
+    @classmethod
+    def from_domain(cls, flag: FlagCount) -> "FlagCountOut":
+        return cls(
+            kind=flag.kind, count=flag.count, amount_dkk=_rounded(flag.amount_dkk, DKK_DECIMALS)
+        )
+
+
+class DataQualityOut(BaseModel):
+    """The whole book: what was loaded, excluded, repaired at load, and kept but flagged."""
+
+    loaded: LoadedCountsOut
+    exclusions: list[ExclusionOut] = Field(
+        description="Every excluded source Claim of the book, one row per reason."
+    )
+    repairs: list[RepairCountOut] = Field(description="Values changed at load, rows kept.")
+    flags: list[FlagCountOut] = Field(description="Rows kept as they are and reported.")
+
+    @classmethod
+    def from_domain(cls, book: Book) -> "DataQualityOut":
+        return cls(
+            loaded=LoadedCountsOut(
+                assets=len(book.assets),
+                policies=len(book.policies),
+                claims=len(book.claims),
+                fx_rates=len(book.fx.rates_dkk_per_unit),
+            ),
+            exclusions=[
+                ExclusionOut.from_domain(summary)
+                for summary in exclusion_summaries(book.exclusions)
+            ],
+            repairs=[RepairCountOut.from_domain(r) for r in repair_counts(book.data_quality)],
+            flags=[FlagCountOut.from_domain(f) for f in flag_counts(book.data_quality)],
+        )
+
+
 class Health(BaseModel):
     status: str
 
@@ -149,6 +217,10 @@ def create_app(book: Book) -> FastAPI:
         if result is None:
             raise HTTPException(status_code=404, detail=f"Unknown portfolio {portfolio_id!r}")
         return PortfolioLossExperienceOut.from_domain(result)
+
+    @app.get("/data-quality")
+    def get_data_quality() -> DataQualityOut:
+        return DataQualityOut.from_domain(book)
 
     return app
 
