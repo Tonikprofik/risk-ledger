@@ -64,11 +64,11 @@ type FxKey = tuple[int, int, Currency]
 
 
 DEFAULT_DATA = Path("data")
-SAMPLE_DATA = DEFAULT_DATA / "sample"
+SAMPLE_DATA = Path("sample")
 
 
 def default_data() -> Path:
-    """`data` when it holds CSVs, else the committed `data/sample`."""
+    """`data` when it holds CSVs, else the committed `sample`."""
     return DEFAULT_DATA if any(DEFAULT_DATA.glob("*.csv")) else SAMPLE_DATA
 
 

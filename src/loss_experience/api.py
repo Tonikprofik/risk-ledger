@@ -5,6 +5,7 @@ the domain dataclasses so internal renames cannot break clients; changes are add
 Rounding happens here and only here: DKK to 2 decimals, the loss ratio to 4.
 """
 
+import logging
 import os
 from pathlib import Path
 
@@ -191,14 +192,17 @@ class DataQualityOut(BaseModel):
 
 class Health(BaseModel):
     status: str
+    data: str = Field(
+        description="Where the Book was loaded from; `sample` means the committed 7-asset set"
+    )
 
 
-def create_app(book: Book) -> FastAPI:
+def create_app(book: Book, source: str = "memory") -> FastAPI:
     app = FastAPI(title="the company loss experience", version="1.0.0")
 
     @app.get("/health")
     def health() -> Health:
-        return Health(status="ok")
+        return Health(status="ok", data=source)
 
     @app.get("/portfolios/loss-experience")
     def get_ranking() -> PortfolioRankingOut:
@@ -228,7 +232,9 @@ def create_app(book: Book) -> FastAPI:
 def app_from_env() -> FastAPI:
     """Entry point for `uvicorn --factory loss_experience.api:app_from_env`.
 
-    Reads LOSS_DATA; without it, `data` when it holds CSVs, else `data/sample`.
+    Reads LOSS_DATA; without it, `data` when it holds CSVs, else the committed `sample`.
     """
     env = os.environ.get("LOSS_DATA")
-    return create_app(load_book(Path(env) if env else default_data()))
+    data = Path(env) if env else default_data()
+    logging.getLogger(__name__).warning("loading book from %s", data.as_posix())
+    return create_app(load_book(data), source=data.as_posix())

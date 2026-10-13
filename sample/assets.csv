@@ -1,0 +1,8 @@
+asset_id,portfolio_id,region,asset_type,construction_year,sum_insured_dkk
+AST-100000,PF-01,Syddanmark,residential,1907,3979000.0
+AST-100001,PF-01,Hovedstaden,commercial,1926,6592000.0
+AST-100002,PF-02,Midtjylland,residential,1965,2500000.0
+AST-100003,PF-02,Nordjylland,commercial,1980,4100000.0
+AST-100004,PF-01,Sjaelland,residential,1952,1800000.0
+AST-100005,PF-02,Syddanmark,residential,2004,2950000.0
+AST-100006,PF-03,Hovedstaden,commercial,1999,5200000.0

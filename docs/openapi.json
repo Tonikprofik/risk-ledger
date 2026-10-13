@@ -132,13 +132,19 @@
       },
       "Health": {
         "properties": {
+          "data": {
+            "description": "Where the Book was loaded from; `sample` means the committed 7-asset set",
+            "title": "Data",
+            "type": "string"
+          },
           "status": {
             "title": "Status",
             "type": "string"
           }
         },
         "required": [
-          "status"
+          "status",
+          "data"
         ],
         "title": "Health",
         "type": "object"

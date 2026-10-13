@@ -16,9 +16,9 @@ COPY src ./src
 RUN uv sync --locked --no-dev
 
 # The committed sample set; compose mounts the real data over /app/data.
-COPY data/sample ./data/sample
+COPY sample ./sample
 
-# With no CSVs in /app/data the app falls back to /app/data/sample.
+# With no CSVs in /app/data the app falls back to /app/sample and /health says so.
 ENV PATH="/app/.venv/bin:$PATH"
 
 EXPOSE 8000

@@ -13,7 +13,7 @@ from loss_experience.domain import (
 )
 from loss_experience.sources import load_book
 
-SAMPLE = Path(__file__).parent.parent / "data" / "sample"
+SAMPLE = Path(__file__).parent.parent / "sample"
 BOOK = load_book(SAMPLE)
 
 

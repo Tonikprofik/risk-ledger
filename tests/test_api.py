@@ -11,7 +11,7 @@ from loss_experience.sources import load_book
 
 ROOT = Path(__file__).parent.parent
 SNAPSHOT = ROOT / "docs" / "openapi.json"
-SAMPLE_BOOK = load_book(ROOT / "data" / "sample")
+SAMPLE_BOOK = load_book(ROOT / "sample")
 
 app = create_app(SAMPLE_BOOK)
 client = TestClient(app)

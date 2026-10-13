@@ -1,4 +1,4 @@
-data: data/sample
+data: sample
 PF-01	fire	policies=0	premium_dkk=0.00	incurred_dkk=0.00	ratio=null	claims=0	largest_dkk=null
 PF-01	flood	policies=1	premium_dkk=12000.00	incurred_dkk=13000.00	ratio=1.0833	claims=3	largest_dkk=8000.00
 PF-01	hail	policies=0	premium_dkk=0.00	incurred_dkk=0.00	ratio=null	claims=0	largest_dkk=null

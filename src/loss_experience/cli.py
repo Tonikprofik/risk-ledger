@@ -8,7 +8,7 @@ loss-experience proof                every Portfolio and Peril, the ranking, the
 loss-experience openapi              the API contract, for docs/openapi.json
 
 `--data` is the directory holding assets.csv, policies.csv, claims.csv and fx_rates.csv.
-Without it: `data` when it holds CSVs, else `data/sample`, a tiny committed set with one of
+Without it: `data` when it holds CSVs, else `sample`, a tiny committed set with one of
 each awkward row (CI has no real data). The first output line names the directory used.
 """
 

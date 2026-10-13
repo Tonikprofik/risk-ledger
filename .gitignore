@@ -12,4 +12,4 @@ __pycache__/
 .venv-wsl/
 
 # task data: unzip loss-data.zip at the repo root (brief: never commit it)
-/data/*.csv
+/data/
