@@ -18,7 +18,9 @@ from loss_experience.domain import (
     Peril,
     PerilLossExperience,
     PortfolioLossExperience,
+    PortfolioTotal,
     loss_experience,
+    rank_portfolios,
 )
 from loss_experience.sources import load_book
 
@@ -54,6 +56,30 @@ class PerilLossExperienceOut(BaseModel):
         )
 
 
+class PortfolioTotalOut(BaseModel):
+    """The six figures of a Peril row, summed over every Peril of the Portfolio."""
+
+    policy_count: int = Field(ge=0)
+    earned_premium_dkk: float = Field(description="Full annual premium at the inception month.")
+    incurred_loss_dkk: float
+    loss_ratio: float | None = Field(
+        description="incurred_loss_dkk / earned_premium_dkk; null when earned premium is 0."
+    )
+    claim_count: int = Field(ge=0, description="Kept Claims of every status.")
+    largest_claim_dkk: float | None = Field(description="null when claim_count is 0.")
+
+    @classmethod
+    def from_domain(cls, total: PortfolioTotal) -> "PortfolioTotalOut":
+        return cls(
+            policy_count=total.policy_count,
+            earned_premium_dkk=round(total.earned_premium_dkk, DKK_DECIMALS),
+            incurred_loss_dkk=round(total.incurred_loss_dkk, DKK_DECIMALS),
+            loss_ratio=_rounded(total.loss_ratio, RATIO_DECIMALS),
+            claim_count=total.claim_count,
+            largest_claim_dkk=_rounded(total.largest_claim_dkk, DKK_DECIMALS),
+        )
+
+
 class ExclusionOut(BaseModel):
     """policy_not_found is book-wide (no Policy, so no Portfolio); the rest are this Portfolio's."""
 
@@ -72,6 +98,7 @@ class ExclusionOut(BaseModel):
 
 class PortfolioLossExperienceOut(BaseModel):
     portfolio_id: str
+    total: PortfolioTotalOut = Field(description="The six figures over every Peril.")
     perils: list[PerilLossExperienceOut] = Field(description="Every Peril, always listed.")
     exclusions: list[ExclusionOut] = Field(
         description="Source Claims left out of every result, one row per reason."
@@ -81,9 +108,17 @@ class PortfolioLossExperienceOut(BaseModel):
     def from_domain(cls, result: PortfolioLossExperience) -> "PortfolioLossExperienceOut":
         return cls(
             portfolio_id=result.portfolio_id,
+            total=PortfolioTotalOut.from_domain(result.total),
             perils=[PerilLossExperienceOut.from_domain(peril) for peril in result.perils],
             exclusions=[ExclusionOut.from_domain(summary) for summary in result.exclusions],
         )
+
+
+class PortfolioRankingOut(BaseModel):
+    portfolios: list[PortfolioLossExperienceOut] = Field(
+        description="Every Portfolio, worst first: total loss_ratio descending, ties by "
+        "incurred_loss_dkk descending, then portfolio_id; null ratios last, by portfolio_id."
+    )
 
 
 class Health(BaseModel):
@@ -97,7 +132,14 @@ def create_app(book: Book) -> FastAPI:
     def health() -> Health:
         return Health(status="ok")
 
-    # FastAPI matches in declaration order: declare static /portfolios/... paths (U4) up here.
+    @app.get("/portfolios/loss-experience")
+    def get_ranking() -> PortfolioRankingOut:
+        return PortfolioRankingOut(
+            portfolios=[
+                PortfolioLossExperienceOut.from_domain(result) for result in rank_portfolios(book)
+            ]
+        )
+
     @app.get(
         "/portfolios/{portfolio_id}/loss-experience",
         responses={404: {"description": "No Asset belongs to this Portfolio"}},

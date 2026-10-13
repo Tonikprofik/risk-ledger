@@ -2,10 +2,11 @@
 
 Recomputes Earned premium, Incurred loss and the two Exclusions from the four CSVs under
 the D14 policy, without importing the service, and optionally compares one Portfolio
-with the API's JSON:
+with the API's JSON; `--ranking` also recounts every Portfolio's total and compares the
+order and figures of GET /portfolios/loss-experience (D16):
 
     python scripts/check_loss_experience.py --data data [--portfolio PF-01]
-        [--api http://localhost:8000]
+        [--api http://localhost:8000] [--ranking]
 """
 
 from __future__ import annotations
@@ -95,11 +96,25 @@ class Result:
     cells: dict[tuple[str, str], Totals]
     perils: list[str]
     portfolios: set[str]
+    portfolio_totals: dict[str, Totals]
     exclusions: dict[str, Tally]
     eur_claims: Tally
 
     def portfolio(self, portfolio_id: str) -> dict[str, Totals]:
         return {p: self.cells.get((portfolio_id, p), Totals()) for p in self.perils}
+
+    def ranking(self) -> list[tuple[str, Totals]]:
+        """Every Portfolio, worst total ratio first, ties by incurred loss, then id (D16)."""
+        rows = [(p, self.portfolio_totals.get(p, Totals())) for p in self.portfolios]
+        return sorted(rows, key=worst_first)
+
+
+def worst_first(row: tuple[str, Totals]) -> tuple[bool, float, float, str]:
+    portfolio_id, totals = row
+    ratio = totals.loss_ratio
+    if ratio is None:
+        return (True, 0.0, 0.0, portfolio_id)
+    return (False, -ratio, -totals.incurred_loss_dkk, portfolio_id)
 
 
 def parse_date(text: str) -> date:
@@ -145,6 +160,7 @@ def compute(data_dir: Path) -> Result:
 
     book = Totals()
     cells: dict[tuple[str, str], Totals] = defaultdict(Totals)
+    portfolio_totals: dict[str, Totals] = defaultdict(Totals)
     cell_of_policy: dict[str, tuple[str, str]] = {}
     for row in read_rows(data_dir / "policies.csv"):
         policy_id = row["policy_id"].strip()
@@ -162,6 +178,7 @@ def compute(data_dir: Path) -> Result:
         )
         cell_of_policy[policy_id] = cell
         cells[cell].add_policy(premium_dkk)
+        portfolio_totals[cell[0]].add_policy(premium_dkk)
         book.add_policy(premium_dkk)
 
     exclusions = {reason: Tally() for reason in EXCLUSION_REASONS}
@@ -187,6 +204,7 @@ def compute(data_dir: Path) -> Result:
             exclusions["negative_paid_amount"].add(incurred_dkk)
             continue
         cells[cell].add_claim(incurred_dkk)
+        portfolio_totals[cell[0]].add_claim(incurred_dkk)
         book.add_claim(incurred_dkk)
         if currency == "EUR":
             eur_claims.add(incurred_dkk)
@@ -196,6 +214,7 @@ def compute(data_dir: Path) -> Result:
         cells=dict(cells),
         perils=sorted({peril for _, peril in cells}),
         portfolios=set(portfolio_of_asset.values()),
+        portfolio_totals=dict(portfolio_totals),
         exclusions=exclusions,
         eur_claims=eur_claims,
     )
@@ -268,16 +287,51 @@ def compare(expected: dict[str, Totals], payload: object, portfolio_id: str) -> 
         if api is None:
             failures.append(f"FAIL {portfolio_id} {peril}: missing from the API response")
             continue
-        for field, value in totals.as_dict().items():
-            if field not in api:
-                failures.append(f"FAIL {portfolio_id} {peril}.{field}: key missing from the API")
-            elif not values_equal(field, value, api[field]):
-                failures.append(
-                    f"FAIL {portfolio_id} {peril}.{field}: csv {value!r}, api {api[field]!r}"
-                )
+        failures.extend(field_failures(f"{portfolio_id} {peril}", totals, api))
     failures.extend(
         f"FAIL {portfolio_id} {peril}: in the API but not in the CSVs" for peril in by_peril
     )
+    return failures
+
+
+def field_failures(label: str, totals: Totals, api: dict[str, object]) -> list[str]:
+    """One FAIL line per figure that differs by more than its tolerance."""
+    failures: list[str] = []
+    for field, value in totals.as_dict().items():
+        if field not in api:
+            failures.append(f"FAIL {label}.{field}: key missing from the API")
+        elif not values_equal(field, value, api[field]):
+            failures.append(f"FAIL {label}.{field}: csv {value!r}, api {api[field]!r}")
+    return failures
+
+
+def compare_ranking(expected: list[tuple[str, Totals]], payload: object) -> list[str]:
+    """FAIL lines for a different order, or for any Portfolio's total that differs."""
+    if not isinstance(payload, dict):
+        return ["FAIL ranking: response is not a JSON object"]
+    items = cast("dict[str, object]", payload).get("portfolios")
+    if not isinstance(items, list):
+        return ["FAIL ranking: response has no 'portfolios' list"]
+    api_order: list[str] = []
+    api_totals: dict[str, dict[str, object]] = {}
+    for item in cast("list[object]", items):
+        entry = cast("dict[str, object]", item) if isinstance(item, dict) else {}
+        portfolio_id, total = entry.get("portfolio_id"), entry.get("total")
+        if not isinstance(portfolio_id, str) or not isinstance(total, dict):
+            return ["FAIL ranking: an item has no 'portfolio_id' string or 'total' object"]
+        api_order.append(portfolio_id)
+        api_totals[portfolio_id] = cast("dict[str, object]", total)
+
+    failures: list[str] = []
+    expected_order = [portfolio_id for portfolio_id, _ in expected]
+    if api_order != expected_order:
+        failures.append(f"FAIL ranking order: csv {expected_order}, api {api_order}")
+    for portfolio_id, totals in expected:
+        api = api_totals.get(portfolio_id)
+        if api is None:
+            failures.append(f"FAIL ranking {portfolio_id}: missing from the API response")
+        else:
+            failures.extend(field_failures(f"ranking {portfolio_id} total", totals, api))
     return failures
 
 
@@ -286,41 +340,82 @@ def fetch(url: str) -> object:
         return cast(object, json.load(response))
 
 
-def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Recompute loss experience from the CSVs.")
-    parser.add_argument("--data", type=Path, required=True, help="directory with the four CSVs")
-    parser.add_argument("--portfolio", default="PF-01", help="Portfolio to show and compare")
-    parser.add_argument("--api", help="API base URL, e.g. http://localhost:8000")
-    args = parser.parse_args(argv)
-    portfolio_id = cast(str, args.portfolio)
-    api_base = cast("str | None", args.api)
-
-    result = compute(cast(Path, args.data))
-    if portfolio_id not in result.portfolios:
-        print(f"unknown portfolio {portfolio_id}", file=sys.stderr)
-        return 2
-    print_figures(result, portfolio_id)
-    if api_base is None:
-        return 0
-
-    url = f"{api_base.rstrip('/')}/portfolios/{portfolio_id}/loss-experience"
+def fetch_or_fail(url: str) -> tuple[object, str | None]:
+    """The JSON at `url`, or a FAIL line saying why there is none."""
     try:
-        payload = fetch(url)
+        return fetch(url), None
     except (urllib.error.URLError, TimeoutError, ConnectionError) as error:
-        print(f"FAIL {url}: {error}")
-        return 1
+        return None, f"FAIL {url}: {error}"
     except json.JSONDecodeError as error:
-        print(f"FAIL {url}: response is not JSON ({error})")
-        return 1
+        return None, f"FAIL {url}: response is not JSON ({error})"
+
+
+def check_portfolio(result: Result, portfolio_id: str, api_base: str) -> bool:
+    url = f"{api_base.rstrip('/')}/portfolios/{portfolio_id}/loss-experience"
+    payload, error = fetch_or_fail(url)
+    if error is not None:
+        print(error)
+        return False
     failures = compare(result.portfolio(portfolio_id), payload, portfolio_id)
     for line in failures:
         print(line)
     checked = len(result.perils) * len(FIELDS)
     if failures:
         print(f"FAIL: {len(failures)} differences against {url}")
-        return 1
+        return False
     print(f"PASS: {portfolio_id} matches {url} on {checked} figures")
-    return 0
+    return True
+
+
+def check_ranking(ranking: list[tuple[str, Totals]], api_base: str) -> bool:
+    url = f"{api_base.rstrip('/')}/portfolios/loss-experience"
+    payload, error = fetch_or_fail(url)
+    if error is not None:
+        print(error)
+        return False
+    failures = compare_ranking(ranking, payload)
+    for line in failures:
+        print(line)
+    if failures:
+        print(f"FAIL: {len(failures)} differences in the ranking against {url}")
+        return False
+    checked = len(ranking) * len(FIELDS)
+    print(
+        f"PASS: ranking of {len(ranking)} portfolios matches {url} in order and {checked} figures"
+    )
+    return True
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description="Recompute loss experience from the CSVs.")
+    parser.add_argument("--data", type=Path, required=True, help="directory with the four CSVs")
+    parser.add_argument("--portfolio", default="PF-01", help="Portfolio to show and compare")
+    parser.add_argument("--api", help="API base URL, e.g. http://localhost:8000")
+    parser.add_argument(
+        "--ranking", action="store_true", help="also show and compare every Portfolio's total"
+    )
+    args = parser.parse_args(argv)
+    portfolio_id = cast(str, args.portfolio)
+    api_base = cast("str | None", args.api)
+    with_ranking = cast(bool, args.ranking)
+
+    result = compute(cast(Path, args.data))
+    if portfolio_id not in result.portfolios:
+        print(f"unknown portfolio {portfolio_id}", file=sys.stderr)
+        return 2
+    print_figures(result, portfolio_id)
+    ranking = result.ranking()
+    if with_ranking:
+        print("ranking, worst ratio first")
+        for row_portfolio_id, totals in ranking:
+            print(table_row(row_portfolio_id, totals))
+    if api_base is None:
+        return 0
+
+    passed = check_portfolio(result, portfolio_id, api_base)
+    if with_ranking:
+        passed = check_ranking(ranking, api_base) and passed
+    return 0 if passed else 1
 
 
 if __name__ == "__main__":

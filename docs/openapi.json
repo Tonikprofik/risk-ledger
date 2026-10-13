@@ -154,14 +154,95 @@
           "portfolio_id": {
             "title": "Portfolio Id",
             "type": "string"
+          },
+          "total": {
+            "$ref": "#/components/schemas/PortfolioTotalOut",
+            "description": "The six figures over every Peril."
           }
         },
         "required": [
           "portfolio_id",
+          "total",
           "perils",
           "exclusions"
         ],
         "title": "PortfolioLossExperienceOut",
+        "type": "object"
+      },
+      "PortfolioRankingOut": {
+        "properties": {
+          "portfolios": {
+            "description": "Every Portfolio, worst first: total loss_ratio descending, ties by incurred_loss_dkk descending, then portfolio_id; null ratios last, by portfolio_id.",
+            "items": {
+              "$ref": "#/components/schemas/PortfolioLossExperienceOut"
+            },
+            "title": "Portfolios",
+            "type": "array"
+          }
+        },
+        "required": [
+          "portfolios"
+        ],
+        "title": "PortfolioRankingOut",
+        "type": "object"
+      },
+      "PortfolioTotalOut": {
+        "description": "The six figures of a Peril row, summed over every Peril of the Portfolio.",
+        "properties": {
+          "claim_count": {
+            "description": "Kept Claims of every status.",
+            "minimum": 0.0,
+            "title": "Claim Count",
+            "type": "integer"
+          },
+          "earned_premium_dkk": {
+            "description": "Full annual premium at the inception month.",
+            "title": "Earned Premium Dkk",
+            "type": "number"
+          },
+          "incurred_loss_dkk": {
+            "title": "Incurred Loss Dkk",
+            "type": "number"
+          },
+          "largest_claim_dkk": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "null when claim_count is 0.",
+            "title": "Largest Claim Dkk"
+          },
+          "loss_ratio": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "incurred_loss_dkk / earned_premium_dkk; null when earned premium is 0.",
+            "title": "Loss Ratio"
+          },
+          "policy_count": {
+            "minimum": 0.0,
+            "title": "Policy Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "policy_count",
+          "earned_premium_dkk",
+          "incurred_loss_dkk",
+          "loss_ratio",
+          "claim_count",
+          "largest_claim_dkk"
+        ],
+        "title": "PortfolioTotalOut",
         "type": "object"
       },
       "ValidationError": {
@@ -228,6 +309,24 @@
           }
         },
         "summary": "Health"
+      }
+    },
+    "/portfolios/loss-experience": {
+      "get": {
+        "operationId": "get_ranking_portfolios_loss_experience_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PortfolioRankingOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Ranking"
       }
     },
     "/portfolios/{portfolio_id}/loss-experience": {

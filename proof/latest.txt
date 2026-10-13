@@ -14,6 +14,9 @@ PF-03	flood	policies=0	premium_dkk=0.00	incurred_dkk=0.00	ratio=null	claims=0	la
 PF-03	hail	policies=0	premium_dkk=0.00	incurred_dkk=0.00	ratio=null	claims=0	largest_dkk=null
 PF-03	storm	policies=0	premium_dkk=0.00	incurred_dkk=0.00	ratio=null	claims=0	largest_dkk=null
 PF-03	subsidence	policies=0	premium_dkk=0.00	incurred_dkk=0.00	ratio=null	claims=0	largest_dkk=null
+ranked	PF-01	policies=4	premium_dkk=35500.00	incurred_dkk=29000.00	ratio=0.8169	claims=5	largest_dkk=10000.00
+ranked	PF-02	policies=4	premium_dkk=39555.50	incurred_dkk=18927.50	ratio=0.4785	claims=5	largest_dkk=7470.00
+ranked	PF-03	policies=0	premium_dkk=0.00	incurred_dkk=0.00	ratio=null	claims=0	largest_dkk=null
 loaded	assets=7	policies=8	claims=10
 excluded	policy_not_found	claims=1	amount_dkk=8952.00
 excluded	negative_paid_amount	claims=1	amount_dkk=-2500.00

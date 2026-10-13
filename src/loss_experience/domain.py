@@ -156,6 +156,19 @@ def earned_premium_dkk(policy: Policy, fx: FxTable) -> float:
 
 
 @dataclass(frozen=True)
+class PortfolioTotal:
+    """The six figures over every Peril of one Portfolio. `loss_ratio` is None iff
+    `earned_premium_dkk` is 0; `largest_claim_dkk` is None iff `claim_count` is 0."""
+
+    policy_count: int
+    earned_premium_dkk: float
+    incurred_loss_dkk: float
+    loss_ratio: float | None
+    claim_count: int
+    largest_claim_dkk: float | None
+
+
+@dataclass(frozen=True)
 class PerilLossExperience:
     """One Peril of one Portfolio. `loss_ratio` is None iff `earned_premium_dkk` is 0;
     `largest_claim_dkk` is None iff `claim_count` is 0."""
@@ -180,10 +193,12 @@ class ExclusionSummary:
 
 @dataclass(frozen=True)
 class PortfolioLossExperience:
-    """Every Peril in enum order, and the Exclusions that affect it: `negative_paid_amount` of
-    its own Policies, and every `policy_not_found`, which names no Policy and so no Portfolio."""
+    """The total over every Peril, every Peril in enum order, and the Exclusions that affect it:
+    `negative_paid_amount` of its own Policies, and every `policy_not_found`, which names no
+    Policy and so no Portfolio."""
 
     portfolio_id: str
+    total: PortfolioTotal
     perils: tuple[PerilLossExperience, ...]
     exclusions: tuple[ExclusionSummary, ...]
 
@@ -229,28 +244,61 @@ def loss_experience(book: Book, portfolio_id: str) -> PortfolioLossExperience | 
         peril = peril_by_policy_id.get(claim.policy_id)
         if peril is not None:
             losses_dkk[peril].append(incurred_loss_dkk(claim, book.fx))
+    policy_ids = set(peril_by_policy_id)
     return PortfolioLossExperience(
         portfolio_id=portfolio_id,
+        total=_total(
+            [dkk for peril in Peril for dkk in premiums_dkk[peril]],
+            [dkk for peril in Peril for dkk in losses_dkk[peril]],
+        ),
         perils=tuple(
             _peril_loss_experience(peril, premiums_dkk[peril], losses_dkk[peril]) for peril in Peril
         ),
         exclusions=exclusion_summaries(
-            [e for e in book.exclusions if _shown_in_portfolio(e, set(peril_by_policy_id))]
+            [e for e in book.exclusions if _shown_in_portfolio(e, policy_ids)]
         ),
     )
 
 
-def _peril_loss_experience(
-    peril: Peril, premiums_dkk: Sequence[float], losses_dkk: Sequence[float]
-) -> PerilLossExperience:
+def rank_portfolios(book: Book) -> tuple[PortfolioLossExperience, ...]:
+    """Every Portfolio named by an Asset, worst first: total `loss_ratio` descending, ties by
+    `incurred_loss_dkk` descending, then `portfolio_id`; Portfolios without a ratio last, by
+    `portfolio_id`."""
+    results = (loss_experience(book, p) for p in {asset.portfolio_id for asset in book.assets})
+    return tuple(sorted((r for r in results if r is not None), key=_worst_first))
+
+
+def _worst_first(result: PortfolioLossExperience) -> tuple[bool, float, float, str]:
+    ratio = result.total.loss_ratio
+    if ratio is None:
+        return (True, 0.0, 0.0, result.portfolio_id)
+    return (False, -ratio, -result.total.incurred_loss_dkk, result.portfolio_id)
+
+
+def _total(premiums_dkk: Sequence[float], losses_dkk: Sequence[float]) -> PortfolioTotal:
+    """The six figures over these Policies' Earned premiums and these Claims' Incurred losses."""
     earned_dkk = math.fsum(premiums_dkk)
     incurred_dkk = math.fsum(losses_dkk)
-    return PerilLossExperience(
-        peril=peril,
+    return PortfolioTotal(
         policy_count=len(premiums_dkk),
         earned_premium_dkk=earned_dkk,
         incurred_loss_dkk=incurred_dkk,
         loss_ratio=None if earned_dkk == 0 else incurred_dkk / earned_dkk,
         claim_count=len(losses_dkk),
         largest_claim_dkk=max(losses_dkk, default=None),
+    )
+
+
+def _peril_loss_experience(
+    peril: Peril, premiums_dkk: Sequence[float], losses_dkk: Sequence[float]
+) -> PerilLossExperience:
+    figures = _total(premiums_dkk, losses_dkk)
+    return PerilLossExperience(
+        peril=peril,
+        policy_count=figures.policy_count,
+        earned_premium_dkk=figures.earned_premium_dkk,
+        incurred_loss_dkk=figures.incurred_loss_dkk,
+        loss_ratio=figures.loss_ratio,
+        claim_count=figures.claim_count,
+        largest_claim_dkk=figures.largest_claim_dkk,
     )

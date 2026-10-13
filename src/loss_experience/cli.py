@@ -2,8 +2,9 @@
 
 loss-experience portfolio PF-01      one Portfolio's loss experience, as the API's JSON
 loss-experience quality              exclusions with their DKK amounts, then repair and flag counts
-loss-experience proof                every Portfolio and Peril, then the quality lines; also
-                                 written to proof/latest.txt
+loss-experience ranking              every Portfolio's total, worst loss ratio first
+loss-experience proof                every Portfolio and Peril, the ranking, then the quality
+                                 lines; also written to proof/latest.txt
 loss-experience openapi              the API contract, for docs/openapi.json
 
 `--data` is the directory holding assets.csv, policies.csv, claims.csv and fx_rates.csv.
@@ -24,6 +25,7 @@ from loss_experience.domain import (
     PerilLossExperience,
     exclusion_summaries,
     loss_experience,
+    rank_portfolios,
 )
 from loss_experience.sources import load_book
 
@@ -49,6 +51,18 @@ def _peril_line(portfolio_id: str, result: PerilLossExperience) -> str:
         f"\tratio={_or_null(result.loss_ratio, '.4f')}\tclaims={result.claim_count}"
         f"\tlargest_dkk={_or_null(result.largest_claim_dkk, '.2f')}"
     )
+
+
+def ranking_lines(book: Book) -> list[str]:
+    """One line per Portfolio, worst total loss ratio first (D16)."""
+    return [
+        f"ranked\t{result.portfolio_id}\tpolicies={result.total.policy_count}"
+        f"\tpremium_dkk={result.total.earned_premium_dkk:.2f}"
+        f"\tincurred_dkk={result.total.incurred_loss_dkk:.2f}"
+        f"\tratio={_or_null(result.total.loss_ratio, '.4f')}\tclaims={result.total.claim_count}"
+        f"\tlargest_dkk={_or_null(result.total.largest_claim_dkk, '.2f')}"
+        for result in rank_portfolios(book)
+    ]
 
 
 def portfolio_lines(book: Book) -> list[str]:
@@ -92,6 +106,7 @@ def main(argv: list[str] | None = None) -> int:
     portfolio = commands.add_parser("portfolio")
     portfolio.add_argument("portfolio_id")
     commands.add_parser("quality")
+    commands.add_parser("ranking")
     commands.add_parser("proof")
     commands.add_parser("openapi")
     args = parser.parse_args(argv)
@@ -111,9 +126,12 @@ def main(argv: list[str] | None = None) -> int:
         print(PortfolioLossExperienceOut.from_domain(result).model_dump_json(indent=2))
         return 0
 
-    body = quality_lines(book)
-    if args.command == "proof":
-        body = [*portfolio_lines(book), *body]
+    if args.command == "ranking":
+        body = ranking_lines(book)
+    elif args.command == "proof":
+        body = [*portfolio_lines(book), *ranking_lines(book), *quality_lines(book)]
+    else:
+        body = quality_lines(book)
     text = "\n".join([f"data: {data.as_posix()}", *body]) + "\n"
     if args.command == "proof":
         PROOF.parent.mkdir(exist_ok=True)
