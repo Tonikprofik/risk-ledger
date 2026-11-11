@@ -11,5 +11,5 @@ __pycache__/
 .claude/worktrees/
 .venv-wsl/
 
-# task data: unzip loss-data.zip at the repo root (brief: never commit it)
+# task data: place the input CSVs in data/ (never commit them)
 /data/

@@ -1,1 +1,1 @@
-"""the company practical task."""
+"""Insurance portfolio loss experience."""

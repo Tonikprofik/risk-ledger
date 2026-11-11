@@ -186,7 +186,7 @@ class Health(BaseModel):
 
 
 def create_app(book: Book, source: str = "memory") -> FastAPI:
-    app = FastAPI(title="the company loss experience", version="1.0.0")
+    app = FastAPI(title="Loss experience", version="1.0.0")
 
     @app.get("/health")
     def health() -> Health:

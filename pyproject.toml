@@ -1,7 +1,7 @@
 [project]
 name = "loss-experience"
 version = "0.1.0"
-description = "Two-hour practical task for the company."
+description = "Insurance portfolio loss experience API."
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
