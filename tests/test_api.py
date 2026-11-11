@@ -5,9 +5,9 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-from loss_experience.api import create_app
-from loss_experience.domain import Claim, ClaimStatus, Currency, Peril, Policy
-from loss_experience.sources import load_book
+from risk_ledger.api import create_app
+from risk_ledger.domain import Claim, ClaimStatus, Currency, Peril, Policy
+from risk_ledger.sources import load_book
 
 ROOT = Path(__file__).parent.parent
 SNAPSHOT = ROOT / "docs" / "openapi.json"
@@ -256,5 +256,5 @@ def test_zero_earned_premium_gives_a_null_ratio_not_zero() -> None:
 
 def test_openapi_matches_published_contract() -> None:
     """Fails on any contract change. If the change is intended and additive, regenerate with
-    `loss-experience openapi > docs/openapi.json` and say so in the commit."""
+    `risk-ledger openapi > docs/openapi.json` and say so in the commit."""
     assert app.openapi() == json.loads(SNAPSHOT.read_text(encoding="utf-8"))

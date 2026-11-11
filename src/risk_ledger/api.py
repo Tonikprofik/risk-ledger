@@ -12,7 +12,7 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
-from loss_experience.domain import (
+from risk_ledger.domain import (
     Book,
     ExclusionReason,
     ExclusionSummary,
@@ -30,7 +30,7 @@ from loss_experience.domain import (
     rank_portfolios,
     repair_counts,
 )
-from loss_experience.sources import default_data, load_book
+from risk_ledger.sources import default_data, load_book
 
 DKK_DECIMALS = 2
 RATIO_DECIMALS = 4
@@ -186,7 +186,7 @@ class Health(BaseModel):
 
 
 def create_app(book: Book, source: str = "memory") -> FastAPI:
-    app = FastAPI(title="Loss experience", version="1.0.0")
+    app = FastAPI(title="Risk Ledger", version="1.0.0")
 
     @app.get("/health")
     def health() -> Health:
@@ -218,7 +218,7 @@ def create_app(book: Book, source: str = "memory") -> FastAPI:
 
 
 def app_from_env() -> FastAPI:
-    """Entry point for `uvicorn --factory loss_experience.api:app_from_env`.
+    """Entry point for `uvicorn --factory risk_ledger.api:app_from_env`.
 
     Reads LOSS_DATA; without it, `data` when it holds CSVs, else the committed `sample`.
     """

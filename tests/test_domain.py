@@ -3,7 +3,7 @@ from datetime import date
 
 import pytest
 
-from loss_experience.domain import (
+from risk_ledger.domain import (
     Claim,
     ClaimStatus,
     Currency,

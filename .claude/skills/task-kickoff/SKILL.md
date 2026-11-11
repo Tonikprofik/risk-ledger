@@ -15,7 +15,7 @@ otherwise `architect-opus`. In Codex use `architect-astra`.
 ## Steps
 
 1. **Record.** Paste the brief verbatim into `docs/TASK.md` (Received, Brief, Test material). Log the
-   start in `docs/AI_LOG.md`. Write the real user task and the baseline (current `loss-experience proof`)
+   start in `docs/AI_LOG.md`. Write the real user task and the baseline (current `risk-ledger proof`)
    under "My reading" before anything else: that is what good means.
 2. **Map.** Spawn `researcher` on the given material only. It returns at most 15 lines: files, sizes,
    columns or bands, CRS, nodata value, spatial extent, time period, IDs, and anything surprising.

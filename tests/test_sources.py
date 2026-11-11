@@ -4,14 +4,14 @@ from pathlib import Path
 
 import pytest
 
-from loss_experience.domain import (
+from risk_ledger.domain import (
     Claim,
     DataQuality,
     ExclusionReason,
     Peril,
     incurred_loss_dkk,
 )
-from loss_experience.sources import load_book
+from risk_ledger.sources import load_book
 
 SAMPLE = Path(__file__).parent.parent / "sample"
 BOOK = load_book(SAMPLE)

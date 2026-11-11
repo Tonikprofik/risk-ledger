@@ -22,4 +22,4 @@ COPY sample ./sample
 ENV PATH="/app/.venv/bin:$PATH"
 
 EXPOSE 8000
-CMD ["uvicorn", "--factory", "loss_experience.api:app_from_env", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "--factory", "risk_ledger.api:app_from_env", "--host", "0.0.0.0", "--port", "8000"]

@@ -15,12 +15,12 @@ summarises it.
 
    | Feature | Proof command | Observed | Status |
    |---|---|---|---|
-   | Field assessment | `loss-experience assess F1` | | planned |
+   | Field assessment | `risk-ledger assess F1` | | planned |
 
 2. **Build the smallest change** that makes that proof possible. One behaviour, disjoint files.
 3. **Run the checks.**
    - Windows: `uv run ruff check . --fix`, `uv run ruff format .`, `uv run pyright`
-   - Python execution: `./scripts/wsl.ps1 run pytest` and `./scripts/wsl.ps1 run loss-experience proof`
+   - Python execution: `./scripts/wsl.ps1 run pytest` and `./scripts/wsl.ps1 run risk-ledger proof`
      (plain `uv run` elsewhere)
    - Web, if touched: `pnpm -C web typecheck`, `pnpm -C web test`, `pnpm -C web build`
    - A failure from the tool or environment rather than the code: look in the Papercuts table in

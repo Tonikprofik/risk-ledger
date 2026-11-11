@@ -1,5 +1,5 @@
 [project]
-name = "loss-experience"
+name = "risk-ledger"
 version = "0.1.0"
 description = "Insurance portfolio loss experience API."
 readme = "README.md"
@@ -10,7 +10,7 @@ dependencies = [
 ]
 
 [project.scripts]
-loss-experience = "loss_experience.cli:main"
+risk-ledger = "risk_ledger.cli:main"
 
 [dependency-groups]
 dev = [

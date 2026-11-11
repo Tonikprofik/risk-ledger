@@ -13,7 +13,7 @@ from datetime import date, datetime
 from itertools import pairwise
 from pathlib import Path
 
-from loss_experience.domain import (
+from risk_ledger.domain import (
     Asset,
     Book,
     Claim,

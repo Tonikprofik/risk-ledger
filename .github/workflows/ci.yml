@@ -16,6 +16,6 @@ jobs:
       - run: uv run ruff format --check .
       - run: uv run pyright
       - run: uv run pytest
-      - run: uv run loss-experience proof
+      - run: uv run risk-ledger proof
       - run: git diff --exit-code proof/
 

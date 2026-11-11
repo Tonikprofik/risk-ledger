@@ -1,11 +1,11 @@
 """Command line: run the core without a server, and produce proof that it works.
 
-loss-experience portfolio PF-01      one Portfolio's loss experience, as the API's JSON
-loss-experience quality              exclusions with their DKK amounts, then repair and flag counts
-loss-experience ranking              every Portfolio's total, worst loss ratio first
-loss-experience proof                every Portfolio and Peril, the ranking, then the quality
+risk-ledger portfolio PF-01      one Portfolio's loss experience, as the API's JSON
+risk-ledger quality              exclusions with their DKK amounts, then repair and flag counts
+risk-ledger ranking              every Portfolio's total, worst loss ratio first
+risk-ledger proof                every Portfolio and Peril, the ranking, then the quality
                                  lines; without --data it is also written to proof/latest.txt
-loss-experience openapi              the API contract, for docs/openapi.json
+risk-ledger openapi              the API contract, for docs/openapi.json
 
 `--data` is the directory holding assets.csv, policies.csv, claims.csv and fx_rates.csv.
 Without it: `data` when it holds CSVs, else `sample`, a tiny committed set with one of
@@ -19,8 +19,8 @@ import sys
 from pathlib import Path
 from typing import assert_never
 
-from loss_experience.api import PortfolioLossExperienceOut, create_app
-from loss_experience.domain import (
+from risk_ledger.api import PortfolioLossExperienceOut, create_app
+from risk_ledger.domain import (
     Book,
     FlagKind,
     LossFigures,
@@ -31,7 +31,7 @@ from loss_experience.domain import (
     rank_portfolios,
     repair_counts,
 )
-from loss_experience.sources import SAMPLE_DATA, default_data, load_book
+from risk_ledger.sources import SAMPLE_DATA, default_data, load_book
 
 PROOF = Path("proof/latest.txt")
 
@@ -110,7 +110,7 @@ def quality_lines(book: Book) -> list[str]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="loss-experience")
+    parser = argparse.ArgumentParser(prog="risk-ledger")
     parser.add_argument("--data", type=Path, default=None)
     commands = parser.add_subparsers(dest="command", required=True)
     portfolio = commands.add_parser("portfolio")

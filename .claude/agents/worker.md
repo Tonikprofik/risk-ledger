@@ -11,7 +11,7 @@ terms in code. Do not delegate, commit, push, or write `docs/DECISIONS.md` or `d
 
 Done means the unit's proof command shows the behaviour (see the `verify` skill):
 - Windows: `uv run ruff check . --fix`, `uv run ruff format .`, `uv run pyright`
-- Python: `./scripts/wsl.ps1 run pytest`, `./scripts/wsl.ps1 run loss-experience proof` (plain `uv run` off Windows)
+- Python: `./scripts/wsl.ps1 run pytest`, `./scripts/wsl.ps1 run risk-ledger proof` (plain `uv run` off Windows)
 
 Report: files changed, check output in one line each, proof output, anything you assumed.
 Stop and report when the unit turns out bigger than described, a decision is needed, or the budget
